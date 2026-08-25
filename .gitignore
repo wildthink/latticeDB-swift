@@ -1,0 +1,16 @@
+.DS_Store
+/.build
+/Build
+/DerivedData
+*.xcframework
+/docs
+*.xcodeproj/xcuserdata
+*.xcworkspace/xcuserdata
+.swiftpm/xcode/*.d
+.swiftpm/xcode/*.dia
+.swiftpm/xcode/*.o
+.swiftpm/xcode/*.swiftconstvalues
+.swiftpm/xcode/*.swiftdeps
+.native/
+.zig-cache/
+

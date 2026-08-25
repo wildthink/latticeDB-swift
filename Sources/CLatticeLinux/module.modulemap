@@ -1,0 +1,5 @@
+module CLatticeLinux [system] {
+    header "shim.h"
+    link "lattice"
+    export *
+}
