@@ -158,7 +158,7 @@ public final class Transaction {
     return try body(handle)
   }
 }
-public enum LatticeDB { public static let nativeVersion = "0.11.1" }
+public enum LatticeDB { public static let nativeVersion = "0.12.0" }
 extension Database {
   public func matchJSON(_ cypher: String, parameters: [String: Value] = [:]) throws -> String {
     guard let handle else { throw LatticeError.transactionClosed }

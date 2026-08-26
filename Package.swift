@@ -34,11 +34,7 @@ let package = Package(
     // file emitted by the upstream Zig build.
     .systemLibrary(
       name: "CLatticeLinux",
-      pkgConfig: "lattice",
-      providers: [
-        .brew(["latticedb"]),
-        .apt(["latticedb"]),
-      ]
+      pkgConfig: "lattice"
     ),
     .target(
       name: "LatticeBridge",

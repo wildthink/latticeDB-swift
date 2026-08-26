@@ -54,6 +54,8 @@ make build
 make test
 ```
 
+macOS always links the pinned static XCFramework, not a Homebrew installation.
+
 For an application that consumes this package directly, build the upstream
 shared library into a stable prefix first:
 
