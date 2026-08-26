@@ -33,14 +33,21 @@ On Linux, the Makefile installs LatticeDB into `Artifacts/lattice-linux` and
 sets `PKG_CONFIG_PATH` so the `CLatticeLinux` system-library target discovers
 the generated `lattice.pc` file. This path links the upstream shared library.
 
+`Native/LatticeDB.lock` pins the upstream repository, release tag, semantic
+version, and immutable commit. `make verify-native` compares the checkout and
+both vendored headers with that lock. Generated artifacts receive a local,
+ignored `Provenance.json` containing the source revision, header SHA-256, Zig
+version, targets, and build time.
+
 `Makefile` selects the appropriate native path for the host. `make native`,
 `make build`, `make test`, and `make run` are the normal entry points. The
 GitHub Actions workflow exercises macOS and Ubuntu builds after changes are
 pushed.
 
-The vendored `Sources/CLattice/include/lattice.h` and any generated native
-artifact must match the same upstream LatticeDB release. Updating only one can
-compile but fail at runtime due to C ABI drift.
+Both vendored `lattice.h` copies and any generated native artifact must match
+the same upstream LatticeDB release. Updating only one can compile but fail at
+runtime due to C ABI drift. Use `make sync-native-header` after intentionally
+updating the lock, never by hand.
 
 ## Transaction And Bridge Rules
 
@@ -80,4 +87,6 @@ transaction API until upstream exposes snapshot selection through the C ABI.
 4. For native changes, verify the CI workflow on both macOS and Ubuntu before
    publishing a release.
 5. If upstream LatticeDB changed, refresh the vendored header and rebuild the
-   artifact from the same source revision.
+   artifact from the same source revision. Run `make check-upstream` to discover
+   releases; the weekly `Upstream Release Check` workflow reports new tags but
+   never updates the lock automatically.

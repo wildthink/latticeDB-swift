@@ -56,7 +56,9 @@ let rows = try database.matchJSON(
 - On macOS, `make build`/`make test` rebuild the static XCFramework under
   `Artifacts/`. On Linux, those targets build an installed shared library under
   `Artifacts/lattice-linux` and supply `PKG_CONFIG_PATH` to SwiftPM.
-- The C ABI header and native artifact must come from the same upstream
-  LatticeDB release. When updating upstream, refresh both and run `make test`.
+- `Native/LatticeDB.lock` pins the upstream release and commit. Native builds
+  verify both vendored C headers against that exact source and emit artifact
+  provenance. Run `make check-upstream` to discover new releases; update the
+  lock and run `make sync-native-header` only as a deliberate upgrade.
 - Read `PROJECT.md` before changing target wiring, memory ownership in the C
   bridge, or the native distribution flow.

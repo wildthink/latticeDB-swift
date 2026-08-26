@@ -3,6 +3,7 @@
 /Build
 /DerivedData
 *.xcframework
+/Artifacts/
 /docs
 *.xcodeproj/xcuserdata
 *.xcworkspace/xcuserdata
@@ -13,4 +14,3 @@
 .swiftpm/xcode/*.swiftdeps
 .native/
 .zig-cache/
-

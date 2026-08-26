@@ -26,3 +26,9 @@ xcodebuild -create-xcframework \
   -library "$work_dir/liblattice.a" \
   -headers "$arm_prefix/include" \
   -output "$package_dir/Artifacts/Lattice.xcframework"
+bash "$package_dir/Scripts/write-native-provenance.sh" \
+  "$source_dir" \
+  "$package_dir/Artifacts/Lattice.xcframework" \
+  "$package_dir/Sources/CLattice/include/lattice.h" \
+  "macos-static-xcframework" \
+  "aarch64-macos,x86_64-macos"

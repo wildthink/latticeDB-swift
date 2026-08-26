@@ -1,0 +1,17 @@
+name: Upstream Release Check
+
+on:
+  schedule:
+    - cron: "18 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for a newer LatticeDB release
+        run: make check-upstream

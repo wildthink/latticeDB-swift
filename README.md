@@ -17,6 +17,28 @@ make run ARGS="version"
 The first native build clones the upstream source to `.native/latticedb`. Set
 `LATTICE_SOURCE` to use an existing source checkout instead.
 
+## Native Version
+
+The pinned upstream repository, tag, version, and immutable commit are tracked
+in [`Native/LatticeDB.lock`](Native/LatticeDB.lock). Every native build verifies
+that both vendored C headers exactly match that source revision, then writes an
+ignored `Provenance.json` alongside the generated artifact. It records the
+LatticeDB version and revision, header SHA-256, Zig version, build time, and
+target set.
+
+```sh
+make verify-native
+make check-upstream
+```
+
+`check-upstream` only reports a newer release. Update the lock, sync headers,
+and rebuild intentionally after reviewing upstream changes:
+
+```sh
+make sync-native-header
+make test
+```
+
 Linux Swift-server applications use the same `LatticeDB` product. Install the
 upstream library and expose its generated `lattice.pc` through `PKG_CONFIG_PATH`.
 On Linux, the package's Makefile does this automatically and installs the native
