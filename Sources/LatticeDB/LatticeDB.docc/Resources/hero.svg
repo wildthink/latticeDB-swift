@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" role="img" aria-label="A network of connected nodes.">
   <defs>
     <style>
-      .n { fill: #3b7dd8; }
-      .m { fill: #2f9e6f; }
-      .o { fill: #c9772e; }
-      .l { stroke: #7d8a99; stroke-width: 2; opacity: .6; }
+      .n { fill: #7fb0f0; }
+      .m { fill: #6fd3a8; }
+      .o { fill: #f0a868; }
+      .l { stroke: #c3cedb; stroke-width: 2; opacity: .75; }
     </style>
   </defs>
   <line class="l" x1="140" y1="110" x2="320" y2="70"/>
