@@ -26,8 +26,8 @@ let ada = try transaction.createNode(label: "Person")
 
 A label classifies a node. It is roughly a table name, with one important
 difference: a node may carry several labels at once, and may gain or lose them
-over time via ``Transaction/addLabel(_:to:)`` and
-``Transaction/removeLabel(_:from:)``. A node with no label is legal.
+over time via `Transaction.addLabel(_:to:)` and
+`Transaction.removeLabel(_:from:)`. A node with no label is legal.
 
 Labels are how you find nodes without a query — ``Transaction/nodeIDs(label:)``
 returns every node carrying one.
@@ -45,7 +45,7 @@ let edge = try transaction.createEdge(from: ada, to: ben, type: "KNOWS")
 ```
 
 An edge is identified by the triple `(source, target, type)` — that is what
-``Transaction/deleteEdge(from:to:type:)`` takes.
+`Transaction.deleteEdge(from:to:type:)` takes.
 
 ### Properties
 

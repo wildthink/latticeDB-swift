@@ -40,7 +40,24 @@ int32_t lattice_bridge_match_json(lattice_database *, const char *, char **);
 int32_t lattice_bridge_match_json_parameters(lattice_database *, const char *,
                                              const lattice_bridge_parameter *,
                                              size_t, char **);
+int32_t lattice_bridge_match_json_txn(lattice_database *, lattice_txn *,
+                                      const char *,
+                                      const lattice_bridge_parameter *, size_t,
+                                      char **);
 void lattice_bridge_free_json(char *);
+void lattice_bridge_free_buffer(char *);
+int32_t lattice_bridge_node_property(lattice_txn *, uint64_t, const char *,
+                                     int32_t *, int64_t *, double *, bool *,
+                                     char **);
+int32_t lattice_bridge_edge_property(lattice_txn *, uint64_t, const char *,
+                                     int32_t *, int64_t *, double *, bool *,
+                                     char **);
+int32_t lattice_bridge_edge_remove_property(lattice_txn *, uint64_t,
+                                            const char *);
+int32_t lattice_bridge_nodes_find_by_property(lattice_txn *, const char *,
+                                              const char *, int32_t, int64_t,
+                                              double, bool, const char *,
+                                              size_t, uint64_t **, size_t *);
 int32_t lattice_bridge_node_property_json(lattice_txn *, uint64_t, const char *,
                                           char **);
 int32_t lattice_bridge_edges_json(lattice_txn *, uint64_t, bool, const char *,

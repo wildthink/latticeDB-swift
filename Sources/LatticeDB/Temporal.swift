@@ -131,9 +131,7 @@ private func epochMilliseconds(_ date: Date) -> Int64 {
 }
 
 private func validateCypherIdentifier(_ identifier: String) throws {
-  guard !identifier.isEmpty,
-    identifier.unicodeScalars.allSatisfy({ $0 == "_" || CharacterSet.alphanumerics.contains($0) })
-  else {
+  guard isSimpleIdentifier(identifier) else {
     throw TemporalQueryError.invalidIdentifier(identifier)
   }
 }

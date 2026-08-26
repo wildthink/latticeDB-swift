@@ -3,6 +3,39 @@
 import Foundation
 import PackageDescription
 
+var latticeBridgeDependencies: [Target.Dependency] = [
+  .target(name: "CLatticeApple")
+]
+
+var latticeTargets: [Target] = [
+  // Apple releases link the static library inside Artifacts/Lattice.xcframework.
+  .target(
+    name: "CLatticeApple",
+    publicHeadersPath: "include",
+    linkerSettings: [
+      .unsafeFlags(
+        [
+          "-L", "Artifacts/Lattice.xcframework/macos-arm64_x86_64",
+          "-llattice",
+        ], .when(platforms: [.macOS]))
+    ]
+  )
+]
+
+#if os(Linux)
+// Only Linux needs pkg-config. Declaring this target on Apple platforms makes
+// SwiftPM probe for lattice.pc even though CLatticeApple supplies the library.
+latticeBridgeDependencies = [
+  .target(name: "CLatticeLinux")
+]
+latticeTargets.append(
+  .systemLibrary(
+    name: "CLatticeLinux",
+    pkgConfig: "lattice"
+  )
+)
+#endif
+
 let package = Package(
   name: "LatticeDB",
   platforms: [
@@ -18,31 +51,10 @@ let package = Package(
     // stable version is available, then replace this with a version range.
     .package(url: "https://github.com/wildthink/LineEditor.git", branch: "main"),
   ],
-  targets: [
-    // Apple releases link the static library inside Artifacts/Lattice.xcframework.
-    .target(
-      name: "CLatticeApple",
-      publicHeadersPath: "include",
-      linkerSettings: [
-        .unsafeFlags(
-          [
-            "-L", "Artifacts/Lattice.xcframework/macos-arm64_x86_64",
-            "-llattice",
-          ], .when(platforms: [.macOS]))
-      ]
-    ),
-    // Linux consumes an installed LatticeDB prefix through the lattice.pc
-    // file emitted by the upstream Zig build.
-    .systemLibrary(
-      name: "CLatticeLinux",
-      pkgConfig: "lattice"
-    ),
+  targets: latticeTargets + [
     .target(
       name: "LatticeBridge",
-      dependencies: [
-        .target(name: "CLatticeApple", condition: .when(platforms: [.macOS])),
-        .target(name: "CLatticeLinux", condition: .when(platforms: [.linux])),
-      ],
+      dependencies: latticeBridgeDependencies,
       publicHeadersPath: "include"
     ),
     .target(

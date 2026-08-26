@@ -8,35 +8,8 @@ extension Database {
   /// prefix used in Cypher. Queries that can write are rejected.
   public func matchJSON(_ cypher: String, parameters: [String: Value] = [:]) throws -> String {
     guard let handle else { throw LatticeError.transactionClosed }
-    let orderedParameters = parameters.sorted { $0.key < $1.key }
-    let names = orderedParameters.map { Array($0.key.utf8CString) }
-    let strings = orderedParameters.map { parameter -> [CChar] in
-      guard case .string(let value) = parameter.value else { return [] }
-      return Array(value.utf8CString)
-    }
-
-    return try withCStringPointers(names) { namePointers in
-      try withCStringPointers(strings) { stringPointers in
-        let bridgeParameters = orderedParameters.indices.map { index in
-          bridgeParameter(
-            name: namePointers[index],
-            value: orderedParameters[index].value,
-            string: stringPointers[index]
-          )
-        }
-        return try bridgeParameters.withUnsafeBufferPointer { parameters in
-          var output: UnsafeMutablePointer<CChar>?
-          let code = cypher.withCString {
-            lattice_bridge_match_json_parameters(
-              handle, $0, parameters.baseAddress, parameters.count, &output)
-          }
-          try check(code)
-          guard let output else { return "[]" }
-          defer { lattice_bridge_free_json(output) }
-          return String(cString: output)
-        }
-      }
-    }
+    return try executeMatchJSON(
+      database: handle, transaction: nil, cypher: cypher, parameters: parameters)
   }
 
   /// Returns the distinct labels currently assigned to at least one node.
@@ -134,6 +107,51 @@ extension Transaction {
       guard let output else { return "[]" }
       defer { lattice_bridge_free_json(output) }
       return String(cString: output)
+    }
+  }
+}
+
+/// Runs a native read-only query and returns its rows as JSON.
+///
+/// When `transaction` is `nil` the bridge opens its own read-only transaction;
+/// otherwise the query executes inside the supplied transaction and observes its
+/// uncommitted writes.
+func executeMatchJSON(
+  database: OpaquePointer?, transaction: OpaquePointer?, cypher: String,
+  parameters: [String: Value]
+) throws -> String {
+  let orderedParameters = parameters.sorted { $0.key < $1.key }
+  let names = orderedParameters.map { Array($0.key.utf8CString) }
+  let strings = orderedParameters.map { parameter -> [CChar] in
+    guard case .string(let value) = parameter.value else { return [] }
+    return Array(value.utf8CString)
+  }
+
+  return try withCStringPointers(names) { namePointers in
+    try withCStringPointers(strings) { stringPointers in
+      let bridgeParameters = orderedParameters.indices.map { index in
+        bridgeParameter(
+          name: namePointers[index],
+          value: orderedParameters[index].value,
+          string: stringPointers[index]
+        )
+      }
+      return try bridgeParameters.withUnsafeBufferPointer { parameters in
+        var output: UnsafeMutablePointer<CChar>?
+        let code = cypher.withCString { cypher in
+          if let transaction {
+            lattice_bridge_match_json_txn(
+              database, transaction, cypher, parameters.baseAddress, parameters.count, &output)
+          } else {
+            lattice_bridge_match_json_parameters(
+              database, cypher, parameters.baseAddress, parameters.count, &output)
+          }
+        }
+        try check(code)
+        guard let output else { return "[]" }
+        defer { lattice_bridge_free_json(output) }
+        return String(cString: output)
+      }
     }
   }
 }

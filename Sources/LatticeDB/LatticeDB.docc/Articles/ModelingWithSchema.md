@@ -85,7 +85,7 @@ dictionary — say, at the edge of an import — without writing it.
 
 The schema validates the dictionary you hand it, so it can only enforce
 `required` on a complete set of properties. Incremental updates through
-``Transaction/setProperty(_:onNode:to:)`` bypass it entirely. Where that matters,
+`Transaction.setProperty(_:onNode:to:)` bypass it entirely. Where that matters,
 build the full dictionary and route it through the schema.
 
 ### Errors

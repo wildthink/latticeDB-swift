@@ -14,7 +14,14 @@ let json = try database.matchJSON("MATCH (p:Person) RETURN p.name")
 ```
 
 Queries that can write are rejected. Mutations go through
-``Database/write(_:)`` and the ``Transaction`` methods.
+``Database/write(_:)``, the ``Transaction`` methods, and ``GraphPlan``; see
+<doc:DeclarativeGraphs>.
+
+This is the bottom layer of the reading stack, and it stays exactly as it is.
+Above it, `Database.match(_:)` returns decoded ``Row`` values from a ``Cypher``
+query that binds its own parameters, and ``Query`` builds the query from typed
+keys. Reach for this one when you want the raw JSON. <doc:QueryingAndUpdating>
+covers the layers above.
 
 ## Cypher in five patterns
 
@@ -89,12 +96,17 @@ works inside a write transaction where `matchJSON` does not:
 - ``Transaction/nodeIDs(label:)`` — every node with a label
 - ``Transaction/labels(of:)`` — a node's labels
 - ``Transaction/nodePropertyJSON(_:of:)`` — one property, JSON-encoded
-- ``Transaction/edgesJSON(for:outgoing:type:)`` — a node's edges in one direction
+- ``Transaction/edgesJSON(for:outgoing:type:)`` — a node's edges in one
+  direction, each `{"id":…,"source":…,"target":…,"type":…}`
 - ``Database/nodeSummaryJSON(_:)`` — a node's labels plus both edge directions
 - ``Database/nodeTypes()`` — every label currently in use
+
+A transaction has the same method: ``Transaction/matchJSON(_:parameters:)``
+runs inside the transaction and so observes its uncommitted writes.
 
 ## See Also
 
 - <doc:GraphBasics>
+- <doc:QueryingAndUpdating>
 - <doc:IndexingAndPerformance>
 - ``Database/matchJSON(_:parameters:)``
