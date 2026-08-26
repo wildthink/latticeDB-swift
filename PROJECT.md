@@ -46,8 +46,9 @@ pushed.
 
 Both vendored `lattice.h` copies and any generated native artifact must match
 the same upstream LatticeDB release. Updating only one can compile but fail at
-runtime due to C ABI drift. Use `make sync-native-header` after intentionally
-updating the lock, never by hand.
+runtime due to C ABI drift. Use `make update-native VERSION=x.y.z` to update
+the source checkout, lock, headers, and exposed Swift version together; it
+intentionally leaves testing and committing to the reviewer.
 
 ## Transaction And Bridge Rules
 
@@ -86,7 +87,7 @@ transaction API until upstream exposes snapshot selection through the C ABI.
    `.zig-cache`, or `Artifacts` output is staged.
 4. For native changes, verify the CI workflow on both macOS and Ubuntu before
    publishing a release.
-5. If upstream LatticeDB changed, refresh the vendored header and rebuild the
-   artifact from the same source revision. Run `make check-upstream` to discover
-   releases; the weekly `Upstream Release Check` workflow reports new tags but
-   never updates the lock automatically.
+5. If upstream LatticeDB changed, run `make update-native VERSION=x.y.z`, then
+   rebuild the artifact from the same source revision. Run `make check-upstream`
+   to discover releases; the weekly `Upstream Release Check` workflow reports
+   new tags but never updates the lock automatically.

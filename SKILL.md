@@ -59,6 +59,6 @@ let rows = try database.matchJSON(
 - `Native/LatticeDB.lock` pins the upstream release and commit. Native builds
   verify both vendored C headers against that exact source and emit artifact
   provenance. Run `make check-upstream` to discover new releases; update the
-  lock and run `make sync-native-header` only as a deliberate upgrade.
+  lock with `make update-native VERSION=x.y.z` only as a deliberate upgrade.
 - Read `PROJECT.md` before changing target wiring, memory ownership in the C
   bridge, or the native distribution flow.

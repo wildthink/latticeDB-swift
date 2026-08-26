@@ -11,7 +11,7 @@ UNAME_S := $(shell uname -s)
 ZIG_TARGET_ARGS := $(if $(LATTICE_ZIG_TARGET),-Dtarget=$(LATTICE_ZIG_TARGET),)
 
 .DEFAULT_GOAL := help
-.PHONY: help resolve native verify-native sync-native-header check-upstream native-apple native-linux linux-build linux-test build test run clean
+.PHONY: help resolve native verify-native sync-native-header check-upstream update-native native-apple native-linux linux-build linux-test build test run clean
 
 ifeq ($(UNAME_S),Darwin)
 NATIVE_TARGET := native-apple
@@ -31,6 +31,7 @@ help:
 	@printf '%s\n' 'make verify-native                           Verify the pinned source revision and vendored header'
 	@printf '%s\n' 'make sync-native-header                      Sync both C headers from the pinned upstream source'
 	@printf '%s\n' 'make check-upstream                          Check upstream releases without changing the lock'
+	@printf '%s\n' 'make update-native VERSION=0.12.0            Update the pinned source, headers, and Swift version; review and test before committing'
 	@printf '%s\n' 'make native-apple                            Build the macOS static XCFramework'
 	@printf '%s\n' 'make native-linux                            Install a Linux shared library under Artifacts/lattice-linux'
 	@printf '%s\n' 'make resolve                                  Resolve Swift dependencies'
@@ -58,6 +59,10 @@ sync-native-header: $(LATTICE_SOURCE)/build.zig
 
 check-upstream:
 	bash Scripts/check-upstream-release.sh "$(LATTICE_REPOSITORY)" "$(LATTICE_UPSTREAM_VERSION)"
+
+update-native:
+	@test -n "$(VERSION)" || (printf '%s\n' 'Specify the target release, for example: make update-native VERSION=0.12.0' >&2; exit 2)
+	bash Scripts/update-lattice-source.sh "$(LATTICE_REPOSITORY)" "$(VERSION)" "$(LATTICE_SOURCE)" "$(CURDIR)"
 
 native: $(NATIVE_TARGET)
 

@@ -31,13 +31,18 @@ make verify-native
 make check-upstream
 ```
 
-`check-upstream` only reports a newer release. Update the lock, sync headers,
-and rebuild intentionally after reviewing upstream changes:
+`check-upstream` only reports a newer release. To prepare an intentional
+upgrade, provide the exact release you reviewed:
 
 ```sh
-make sync-native-header
+make update-native VERSION=0.12.0
+make verify-native
 make test
 ```
+
+`update-native` updates the local upstream checkout, lock, both vendored
+headers, and `LatticeDB.nativeVersion`. It does not commit, so review the
+upstream release notes and the resulting diff before making the upgrade final.
 
 Linux Swift-server applications use the same `LatticeDB` product. Install the
 upstream library and expose its generated `lattice.pc` through `PKG_CONFIG_PATH`.
