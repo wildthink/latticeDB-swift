@@ -17,6 +17,31 @@ make run ARGS="version"
 The first native build clones the upstream source to `.native/latticedb`. Set
 `LATTICE_SOURCE` to use an existing source checkout instead.
 
+## Documentation
+
+The Swift API, articles, and a two-chapter tutorial live in the DocC catalog at
+`Sources/LatticeDB/LatticeDB.docc`.
+
+```sh
+make docs           # build the archive into .build/documentation
+make docs-preview   # serve it locally
+```
+
+`make docs` treats documentation warnings as errors, so a broken symbol link or
+malformed directive fails the build. The archive contains the `LatticeDB` target
+alone.
+
+`swift-docc-plugin` is only added to the package when `LATTICE_DOCS` is set,
+which the docs targets do for themselves. Ordinary builds — and anything that
+depends on LatticeDB — never resolve the plugin or SymbolKit. The docs targets
+also restore `Package.resolved` afterwards, so the committed lock keeps
+describing the dependency set consumers actually get.
+
+In Xcode, use **Product > Build Documentation** with the `LatticeDB-Docs`
+scheme selected. The default `LatticeDB-Package` scheme documents every
+dependency as well — ArgumentParser, LineEditor, and the rest — because Xcode
+builds documentation for everything the scheme builds.
+
 ## Native Version
 
 The pinned upstream repository, tag, version, and immutable commit are tracked

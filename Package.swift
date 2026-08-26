@@ -1,5 +1,6 @@
 // swift-tools-version: 6.3
 
+import Foundation
 import PackageDescription
 
 let package = Package(
@@ -60,3 +61,12 @@ let package = Package(
   ],
   swiftLanguageModes: [.v6]
 )
+
+// The DocC plugin is only needed to build documentation. Adding it
+// unconditionally would make every consumer of LatticeDB resolve it and
+// SymbolKit as well, so `make docs` opts in through the environment.
+if ProcessInfo.processInfo.environment["LATTICE_DOCS"] != nil {
+  package.dependencies.append(
+    .package(url: "https://github.com/apple/swift-docc-plugin.git", from: "1.4.0")
+  )
+}

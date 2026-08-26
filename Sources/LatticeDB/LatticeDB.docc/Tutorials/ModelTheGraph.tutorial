@@ -1,0 +1,168 @@
+@Tutorial(time: 15) {
+  @Intro(title: "Model the Graph") {
+    A graph is built from three moves: create a node, give it properties,
+    connect it to another node. You will use each of them, then add an
+    optional schema that turns a typo into a Swift error.
+
+    @Image(source: "chapter-model.svg", alt: "A network of connected nodes.")
+  }
+
+  @Section(title: "Create nodes and properties") {
+    @ContentAndMedia {
+      Open a database file, then fill it inside a single write transaction.
+    }
+
+    @Steps {
+      @Step {
+        Open a database. The file is created if it does not exist, and the
+        handle closes when `database` is released.
+
+        @Code(name: "Neighborhood.swift", file: "Model-01.swift")
+      }
+
+      @Step {
+        Create two nodes inside a write transaction. `createNode` returns a
+        ``NodeID`` — a stable `UInt64` — and the label classifies the node the
+        way a table name would.
+
+        The closure commits when it returns and rolls back if it throws, so
+        return the identifiers you want to keep.
+
+        @Code(name: "Neighborhood.swift", file: "Model-02.swift")
+      }
+
+      @Step {
+        Add properties. A property is a named ``Value`` — one of `null`,
+        `bool`, `integer`, `double`, or `string`. There is no nested structure;
+        anything more complex becomes another node.
+
+        @Code(name: "Neighborhood.swift", file: "Model-03.swift")
+      }
+
+      @Step {
+        Add a place and an event. Nothing declares these labels in advance —
+        a label exists as soon as a node carries it.
+
+        @Code(name: "Neighborhood.swift", file: "Model-04.swift")
+      }
+    }
+  }
+
+  @Section(title: "Connect them with edges") {
+    @ContentAndMedia {
+      Edges are typed, directed, and can carry properties of their own. That
+      last part is what lets a relationship hold data without inventing a node
+      for it.
+    }
+
+    @Steps {
+      @Step {
+        Connect the nodes. An edge type is conventionally an upper-case verb,
+        and direction is part of the edge's identity — `ada KNOWS ben` is not
+        the same edge as `ben KNOWS ada`.
+
+        Note the `rsvp` property on the `ATTENDS` edge: the fact belongs to the
+        relationship, not to either endpoint.
+
+        @Code(name: "Neighborhood.swift", file: "Model-05.swift")
+      }
+    }
+  }
+
+  @Section(title: "Validate with a schema") {
+    @ContentAndMedia {
+      LatticeDB does not enforce a schema in storage. ``GraphSchema`` is an
+      opt-in, in-memory check applied to a property dictionary before it is
+      written.
+    }
+
+    @Steps {
+      @Step {
+        Describe the shape you expect. `required` makes a key mandatory, and
+        `allowsAdditionalProperties: false` closes the definition so an
+        undeclared key is rejected.
+
+        @Code(name: "Schema.swift", file: "Model-06.swift")
+      }
+
+      @Step {
+        Create through the schema. ``GraphSchema/createNode(in:label:properties:)``
+        validates, creates the node with its label, and sets every property.
+
+        @Code(name: "Schema.swift", file: "Model-07.swift")
+      }
+
+      @Step {
+        Now the mistakes surface as typed errors instead of stray data. Each
+        case names the entity and property at fault.
+
+        @Code(name: "Schema.swift", file: "Model-08.swift")
+      }
+    }
+  }
+
+  @Assessments {
+    @MultipleChoice {
+      A node carries the label `Person`. Can it also carry `Employee`?
+
+      @Choice(isCorrect: true) {
+        Yes — a node may carry several labels, and gain or lose them over time.
+
+        @Justification(reaction: "Correct") {
+          Use ``Transaction/addLabel(_:to:)`` and
+          ``Transaction/removeLabel(_:from:)``. This is the main way labels
+          differ from table names.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        No — a node has exactly one label, like a row has one table.
+
+        @Justification(reaction: "Not quite") {
+          That is the relational intuition, but labels are a set. A node may
+          have several, or none at all.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        Only if a ``GraphSchema`` declares both.
+
+        @Justification(reaction: "Not quite") {
+          ``GraphSchema`` is advisory and validates property dictionaries. It
+          does not constrain which labels a node may carry.
+        }
+      }
+    }
+
+    @MultipleChoice {
+      Where should the `rsvp` flag for a person's attendance live?
+
+      @Choice(isCorrect: true) {
+        On the `ATTENDS` edge.
+
+        @Justification(reaction: "Correct") {
+          The fact is about the relationship. Edge properties are what let you
+          record it without inventing an intermediate node.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        On the `Person` node.
+
+        @Justification(reaction: "Not quite") {
+          A person may attend several events. The flag would collide as soon
+          as there is a second one.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        In a separate `RSVP` node joined to both.
+
+        @Justification(reaction: "Not quite") {
+          That works, and is what you would do in SQL — but it is unnecessary
+          here. Reach for it only when the relationship needs its own edges.
+        }
+      }
+    }
+  }
+}

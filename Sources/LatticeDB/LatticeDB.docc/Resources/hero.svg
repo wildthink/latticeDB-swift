@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" role="img" aria-label="A network of connected nodes.">
+  <defs>
+    <style>
+      .n { fill: #3b7dd8; }
+      .m { fill: #2f9e6f; }
+      .o { fill: #c9772e; }
+      .l { stroke: #7d8a99; stroke-width: 2; opacity: .6; }
+    </style>
+  </defs>
+  <line class="l" x1="140" y1="110" x2="320" y2="70"/>
+  <line class="l" x1="320" y1="70" x2="500" y2="130"/>
+  <line class="l" x1="140" y1="110" x2="220" y2="260"/>
+  <line class="l" x1="220" y1="260" x2="410" y2="290"/>
+  <line class="l" x1="410" y1="290" x2="500" y2="130"/>
+  <line class="l" x1="320" y1="70" x2="410" y2="290"/>
+  <line class="l" x1="220" y1="260" x2="320" y2="70"/>
+  <circle class="n" cx="140" cy="110" r="26"/>
+  <circle class="n" cx="320" cy="70" r="34"/>
+  <circle class="m" cx="500" cy="130" r="26"/>
+  <circle class="o" cx="220" cy="260" r="30"/>
+  <circle class="m" cx="410" cy="290" r="24"/>
+</svg>

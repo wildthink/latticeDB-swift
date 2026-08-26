@@ -1,0 +1,31 @@
+@Tutorials(name: "LatticeDB") {
+  @Intro(title: "Build a Graph") {
+    Model a small neighborhood — people, the places they look after, and the
+    events they attend — then ask it questions in Cypher.
+
+    You need Swift 6.1 or later and this package as a dependency. No prior
+    graph-database experience is assumed; if the terms are new, read
+    <doc:GraphBasics> first.
+
+    @Image(source: "hero.svg", alt: "A network of connected nodes.")
+  }
+
+  @Chapter(name: "Model the Graph") {
+    Create nodes, connect them with typed edges, and add a schema that catches
+    mistakes before they reach the database.
+
+    @Image(source: "chapter-model.svg", alt: "A network of connected nodes.")
+
+    @TutorialReference(tutorial: "doc:ModelTheGraph")
+  }
+
+  @Chapter(name: "Query the Graph") {
+    Read the graph back with Cypher, traverse it two hops, decode the results
+    into Swift, and add an index.
+
+    @Image(source: "chapter-query.svg", alt: "A path traced through a network of nodes.")
+
+    @TutorialReference(tutorial: "doc:QueryTheGraph")
+  }
+
+}

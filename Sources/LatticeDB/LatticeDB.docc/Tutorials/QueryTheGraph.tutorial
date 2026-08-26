@@ -1,0 +1,161 @@
+@Tutorial(time: 15) {
+  @Intro(title: "Query the Graph") {
+    Cypher is a drawing of the pattern you want to find. You will start with a
+    single label, add a filter, traverse two hops, decode the rows into Swift,
+    and finish at the command line.
+
+    @Image(source: "chapter-query.svg", alt: "A path traced through a network of nodes.")
+  }
+
+  @Section(title: "Match and filter") {
+    @ContentAndMedia {
+      ``Database/matchJSON(_:parameters:)`` runs a read-only query and returns
+      its rows as a JSON string, keyed by the `RETURN` expressions.
+    }
+
+    @Steps {
+      @Step {
+        Match every `Person`. Parentheses are nodes, `person` binds the match
+        so `RETURN` can refer to it, and the label after the colon narrows what
+        is matched.
+
+        @Code(name: "Queries.swift", file: "Query-01.swift")
+      }
+
+      @Step {
+        Filter with `WHERE`, and supply the value as a parameter. The name in
+        the dictionary omits the `$` that Cypher uses at the call site.
+
+        Never interpolate a value into the query text — parameters handle
+        quoting for you and close off injection.
+
+        @Code(name: "Queries.swift", file: "Query-02.swift")
+      }
+    }
+  }
+
+  @Section(title: "Traverse") {
+    @ContentAndMedia {
+      Arrows in the pattern follow edges. This is where a graph earns its keep:
+      each extra hop is another arrow, not another join.
+    }
+
+    @Steps {
+      @Step {
+        Follow one `KNOWS` edge, then chain three more hops to reach the events
+        Ada's friends attend and the places those events happen.
+
+        `AS` renames a column, which keeps the JSON keys plain.
+
+        @Code(name: "Queries.swift", file: "Query-03.swift")
+      }
+
+      @Step {
+        Decode the rows. Because the columns are chosen by the query rather
+        than by a schema, the result is JSON — a `Decodable` struct whose
+        properties match the aliases turns it into Swift values.
+
+        @Code(name: "Queries.swift", file: "Query-04.swift")
+      }
+    }
+  }
+
+  @Section(title: "Index and inspect") {
+    @ContentAndMedia {
+      Two last tools: an equality index for the properties you filter on, and
+      the direct read API for lookups that do not need a query at all.
+    }
+
+    @Steps {
+      @Step {
+        Add an index on the property you filter by. The query text is
+        unchanged — only its cost is. Indexes are persistent, and they help
+        equality comparisons, not ranges.
+
+        @Code(name: "Queries.swift", file: "Query-05.swift")
+      }
+
+      @Step {
+        For point lookups, skip Cypher. These methods work inside a write
+        transaction, where `matchJSON` does not.
+
+        @Code(name: "Queries.swift", file: "Query-06.swift")
+      }
+
+      @Step {
+        The same file is readable from a terminal with the `lattice` command —
+        useful for checking what your app actually wrote.
+
+        @Code(name: "explore.sh", file: "Query-07.sh")
+      }
+    }
+  }
+
+  @Assessments {
+    @MultipleChoice {
+      Why pass `["name": .string("Ada Chen")]` as a parameter instead of
+      interpolating the name into the query string?
+
+      @Choice(isCorrect: true) {
+        Parameters handle quoting and prevent query injection.
+
+        @Justification(reaction: "Correct") {
+          Interpolation breaks on quotes and backslashes in the data, and
+          becomes an injection hazard the moment the value comes from outside
+          your program.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        Interpolated queries are rejected by ``Database/matchJSON(_:parameters:)``.
+
+        @Justification(reaction: "Not quite") {
+          They run. `matchJSON` only rejects queries that can *write* — which
+          is exactly why the injection risk is worth avoiding.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        Parameters are required whenever the query has a `WHERE` clause.
+
+        @Justification(reaction: "Not quite") {
+          A literal in `WHERE` is legal Cypher. Parameters are a correctness
+          and safety choice, not a syntactic requirement.
+        }
+      }
+    }
+
+    @MultipleChoice {
+      You add `createNodeIndex(label: "Person", property: "joinedOn")` and
+      queries filtering `person.joinedOn > $cutoff` are no faster. Why?
+
+      @Choice(isCorrect: true) {
+        These are equality indexes; they do not accelerate range comparisons.
+
+        @Justification(reaction: "Correct") {
+          Anchor the pattern on an indexed equality — or on a small label —
+          and let the range predicate filter what remains. The same applies to
+          the valid-time predicates in <doc:TemporalGraphs>.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        The index only applies after the database is reopened.
+
+        @Justification(reaction: "Not quite") {
+          Indexes take effect immediately and persist in the file.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        Indexes apply to edges only.
+
+        @Justification(reaction: "Not quite") {
+          Both exist — ``Database/createNodeIndex(label:property:)`` and
+          ``Database/createEdgeIndex(type:property:)``. The limitation is
+          equality versus range.
+        }
+      }
+    }
+  }
+}

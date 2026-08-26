@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 380" width="720" height="380" role="img" aria-label="A property graph: Person nodes joined by KNOWS edges, with edges to a Place and an Event.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7d8a99"/>
+    </marker>
+    <style>
+      .node { stroke-width: 2; }
+      .person { fill: #3b7dd8; stroke: #2a5fa8; }
+      .place  { fill: #2f9e6f; stroke: #227552; }
+      .event  { fill: #c9772e; stroke: #9c5a21; }
+      .edge   { stroke: #7d8a99; stroke-width: 2; fill: none; }
+      .label  { font: 600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #ffffff; text-anchor: middle; }
+      .prop   { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #7d8a99; text-anchor: middle; }
+      .etype  { font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #7d8a99; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <line class="edge" x1="196" y1="90" x2="324" y2="90" marker-end="url(#arrow)"/>
+  <text class="etype" x="260" y="80">KNOWS</text>
+
+  <line class="edge" x1="380" y1="132" x2="440" y2="228" marker-end="url(#arrow)"/>
+  <text class="etype" x="435" y="180">CARES_FOR</text>
+
+  <line class="edge" x1="160" y1="132" x2="160" y2="228" marker-end="url(#arrow)"/>
+  <text class="etype" x="160" y="185">ATTENDS</text>
+
+  <line class="edge" x1="216" y1="270" x2="384" y2="270" marker-end="url(#arrow)"/>
+  <text class="etype" x="300" y="260">HAPPENS_AT</text>
+
+  <circle class="node person" cx="160" cy="90" r="42"/>
+  <text class="label" x="160" y="88">Person</text>
+  <text class="label" x="160" y="104" style="font-weight:400;font-size:11px">Ada</text>
+
+  <circle class="node person" cx="360" cy="90" r="42"/>
+  <text class="label" x="360" y="88">Person</text>
+  <text class="label" x="360" y="104" style="font-weight:400;font-size:11px">Ben</text>
+
+  <circle class="node event" cx="160" cy="270" r="42"/>
+  <text class="label" x="160" y="268">Event</text>
+  <text class="label" x="160" y="284" style="font-weight:400;font-size:11px">Salon</text>
+
+  <circle class="node place" cx="440" cy="270" r="42"/>
+  <text class="label" x="440" y="268">Place</text>
+  <text class="label" x="440" y="284" style="font-weight:400;font-size:11px">Harbor Park</text>
+
+  <text class="prop" x="600" y="80" style="text-anchor:start">node label ──▸ Person</text>
+  <text class="prop" x="600" y="102" style="text-anchor:start">property   ──▸ name: "Ada"</text>
+  <text class="prop" x="600" y="124" style="text-anchor:start">edge type  ──▸ KNOWS</text>
+  <text class="prop" x="600" y="146" style="text-anchor:start">direction  ──▸ source ▸ target</text>
+</svg>

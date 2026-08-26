@@ -11,7 +11,7 @@ UNAME_S := $(shell uname -s)
 ZIG_TARGET_ARGS := $(if $(LATTICE_ZIG_TARGET),-Dtarget=$(LATTICE_ZIG_TARGET),)
 
 .DEFAULT_GOAL := help
-.PHONY: help resolve native verify-native sync-native-header check-upstream update-native native-apple native-linux linux-build linux-test build test run clean
+.PHONY: help resolve native verify-native sync-native-header check-upstream update-native native-apple native-linux linux-build linux-test build test run docs docs-preview clean
 
 ifeq ($(UNAME_S),Darwin)
 NATIVE_TARGET := native-apple
@@ -38,6 +38,8 @@ help:
 	@printf '%s\n' 'make build                                    Build the library and CLI'
 	@printf '%s\n' 'make test                                     Run Swift tests'
 	@printf '%s\n' 'make run ARGS="node create --database demo.db"  Run the CLI'
+	@printf '%s\n' 'make docs                                     Build the DocC archive into .build/documentation'
+	@printf '%s\n' 'make docs-preview                             Serve the documentation locally'
 	@printf '%s\n' 'make linux-test                               Run Swift tests against the Linux system-library install'
 	@printf '%s\n' 'make clean                                    Remove local build outputs'
 
@@ -83,6 +85,35 @@ test: native resolve
 
 run: native resolve
 	$(SWIFT_NATIVE_ENV) swift run lattice $(ARGS)
+
+DOCS_OUTPUT ?= $(CURDIR)/.build/documentation
+# LATTICE_DOCS opts the swift-docc-plugin dependency into Package.swift. It is
+# set only here so that ordinary builds, and consumers of this package, never
+# resolve the plugin. See the note at the bottom of Package.swift.
+DOCS_ENV := LATTICE_DOCS=1
+
+# Building docs resolves the extra plugin dependency, which rewrites
+# Package.resolved. Restore it afterwards (and on interrupt) so the committed
+# lock keeps describing the dependency set that consumers actually get.
+DOCS_RESOLVED_BACKUP := $(CURDIR)/.build/Package.resolved.docs-backup
+define with_docs_resolved
+	@mkdir -p "$(CURDIR)/.build"
+	@set -eu -o pipefail; \
+	cp Package.resolved "$(DOCS_RESOLVED_BACKUP)"; \
+	trap 'mv -f "$(DOCS_RESOLVED_BACKUP)" Package.resolved' EXIT; \
+	$(DOCS_ENV) $(SWIFT_NATIVE_ENV) $(1)
+endef
+
+docs: native
+	$(call with_docs_resolved,swift package \
+		--allow-writing-to-directory "$(DOCS_OUTPUT)" \
+		generate-documentation --target LatticeDB \
+		--warnings-as-errors \
+		--output-path "$(DOCS_OUTPUT)")
+
+docs-preview: native
+	$(call with_docs_resolved,swift package --disable-sandbox \
+		preview-documentation --target LatticeDB)
 
 linux-build: native-linux resolve
 	PKG_CONFIG_PATH="$(LATTICE_LINUX_PREFIX)/lib/pkgconfig$${PKG_CONFIG_PATH:+:$${PKG_CONFIG_PATH}}" swift build
