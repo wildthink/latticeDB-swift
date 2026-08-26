@@ -1,5 +1,5 @@
 {
-  "originHash" : "867bac63762928a8b37c04db635805cd88d37e583144ae61e3dd6c296c38360a",
+  "originHash" : "b25199d65fa88b624b11387aee7832e9e22104c5e1f0c36812e00f2f016b1233",
   "pins" : [
     {
       "identity" : "bestline-swift",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "de068b4aa27a4450b3d1ddc9b2525e17dc336b6e",
         "version" : "1.0.0"
+      }
+    },
+    {
+      "identity" : "lineeditor",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/wildthink/LineEditor.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "6454396058baae23294b39502dd17d8755536155"
       }
     },
     {
