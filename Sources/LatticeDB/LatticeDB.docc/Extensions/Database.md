@@ -22,8 +22,20 @@ own transactions internally.
 - ``read(_:)``
 - ``write(_:)``
 
+### Declaring and Updating
+
+- ``apply(schema:mergeStrategy:_:)``
+- ``update(schema:mergeStrategy:_:)``
+
 ### Querying
 
+- ``match(_:)-(Root.Type)``
+- ``match(_:)-(Cypher)``
+- ``match(_:as:)``
+- ``matchFirst(_:)``
+- ``matchFirst(_:as:)``
+- ``matchScalar(_:as:)``
+- ``matchCount(_:)``
 - ``matchJSON(_:parameters:)``
 - ``nodeTypes()``
 - ``nodeSummaryJSON(_:)``

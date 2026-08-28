@@ -195,11 +195,10 @@ static void json_value(FILE *stream, lattice_value value) {
     fputs("null", stream);
   }
 }
-int32_t
-lattice_bridge_match_json_parameters(lattice_database *database,
-                                     const char *cypher,
-                                     const lattice_bridge_parameter *parameters,
-                                     size_t parameter_count, char **out) {
+static int32_t match_json_common(lattice_database *database,
+                                 lattice_txn *borrowed, const char *cypher,
+                                 const lattice_bridge_parameter *parameters,
+                                 size_t parameter_count, char **out) {
   lattice_query *query = NULL;
   lattice_txn *txn = NULL;
   lattice_result *result = NULL;
@@ -221,9 +220,13 @@ lattice_bridge_match_json_parameters(lattice_database *database,
       return code;
     }
   }
-  code = lattice_begin(database, LATTICE_TXN_READ_ONLY, &txn);
-  if (code == LATTICE_OK)
-    code = lattice_query_execute(query, txn, &result);
+  if (borrowed)
+    code = lattice_query_execute(query, borrowed, &result);
+  else {
+    code = lattice_begin(database, LATTICE_TXN_READ_ONLY, &txn);
+    if (code == LATTICE_OK)
+      code = lattice_query_execute(query, txn, &result);
+  }
   if (code != LATTICE_OK) {
     if (result)
       lattice_result_free(result);
@@ -237,7 +240,8 @@ lattice_bridge_match_json_parameters(lattice_database *database,
   FILE *stream = open_memstream(&buffer, &length);
   if (!stream) {
     lattice_result_free(result);
-    lattice_rollback(txn);
+    if (txn)
+      lattice_rollback(txn);
     lattice_query_free(query);
     return LATTICE_ERROR_OUT_OF_MEMORY;
   }
@@ -266,16 +270,34 @@ lattice_bridge_match_json_parameters(lattice_database *database,
   fputc(']', stream);
   fclose(stream);
   lattice_result_free(result);
-  lattice_rollback(txn);
+  if (txn)
+    lattice_rollback(txn);
   lattice_query_free(query);
   *out = buffer;
   return LATTICE_OK;
+}
+int32_t
+lattice_bridge_match_json_parameters(lattice_database *database,
+                                     const char *cypher,
+                                     const lattice_bridge_parameter *parameters,
+                                     size_t parameter_count, char **out) {
+  return match_json_common(database, NULL, cypher, parameters, parameter_count,
+                           out);
+}
+int32_t
+lattice_bridge_match_json_txn(lattice_database *database, lattice_txn *txn,
+                              const char *cypher,
+                              const lattice_bridge_parameter *parameters,
+                              size_t parameter_count, char **out) {
+  return match_json_common(database, txn, cypher, parameters, parameter_count,
+                           out);
 }
 int32_t lattice_bridge_match_json(lattice_database *database,
                                   const char *cypher, char **out) {
   return lattice_bridge_match_json_parameters(database, cypher, NULL, 0, out);
 }
 void lattice_bridge_free_json(char *json) { free(json); }
+void lattice_bridge_free_buffer(char *buffer) { free(buffer); }
 int32_t lattice_bridge_node_property_json(lattice_txn *txn, uint64_t node,
                                           const char *key, char **out) {
   lattice_value value = {0};
@@ -294,6 +316,78 @@ int32_t lattice_bridge_node_property_json(lattice_txn *txn, uint64_t node,
   lattice_value_free(&value);
   *out = buffer;
   return LATTICE_OK;
+}
+static int32_t copy_scalar(lattice_value value, int32_t *type_out,
+                           int64_t *integer_out, double *real_out,
+                           bool *boolean_out, char **string_out) {
+  *type_out = (int32_t)value.type;
+  *integer_out = 0;
+  *real_out = 0;
+  *boolean_out = false;
+  *string_out = NULL;
+  switch (value.type) {
+  case LATTICE_VALUE_BOOL:
+    *boolean_out = value.data.bool_val;
+    break;
+  case LATTICE_VALUE_INT:
+    *integer_out = value.data.int_val;
+    break;
+  case LATTICE_VALUE_FLOAT:
+    *real_out = value.data.float_val;
+    break;
+  case LATTICE_VALUE_STRING: {
+    size_t length = value.data.string_val.len;
+    char *copy = malloc(length + 1);
+    if (!copy)
+      return LATTICE_ERROR_OUT_OF_MEMORY;
+    if (length)
+      memcpy(copy, value.data.string_val.ptr, length);
+    copy[length] = '\0';
+    *string_out = copy;
+    break;
+  }
+  default:
+    break;
+  }
+  return LATTICE_OK;
+}
+int32_t lattice_bridge_node_property(lattice_txn *txn, uint64_t node,
+                                     const char *key, int32_t *type_out,
+                                     int64_t *integer_out, double *real_out,
+                                     bool *boolean_out, char **string_out) {
+  lattice_value value = {0};
+  int32_t code = lattice_node_get_property(txn, node, key, &value);
+  if (code != LATTICE_OK)
+    return code;
+  code = copy_scalar(value, type_out, integer_out, real_out, boolean_out,
+                     string_out);
+  lattice_value_free(&value);
+  return code;
+}
+int32_t lattice_bridge_edge_property(lattice_txn *txn, uint64_t edge,
+                                     const char *key, int32_t *type_out,
+                                     int64_t *integer_out, double *real_out,
+                                     bool *boolean_out, char **string_out) {
+  lattice_value value = {0};
+  int32_t code = lattice_edge_get_property(txn, edge, key, &value);
+  if (code != LATTICE_OK)
+    return code;
+  code = copy_scalar(value, type_out, integer_out, real_out, boolean_out,
+                     string_out);
+  lattice_value_free(&value);
+  return code;
+}
+int32_t lattice_bridge_edge_remove_property(lattice_txn *txn, uint64_t edge,
+                                            const char *key) {
+  return lattice_edge_remove_property(txn, edge, key);
+}
+int32_t lattice_bridge_nodes_find_by_property(
+    lattice_txn *txn, const char *label, const char *property, int32_t type,
+    int64_t integer, double real, bool boolean, const char *string,
+    size_t limit, uint64_t **ids, size_t *count) {
+  lattice_value value = scalar(type, integer, real, boolean, string);
+  return lattice_nodes_find_by_label_property(txn, label, property, &value,
+                                              limit, ids, count);
 }
 int32_t lattice_bridge_edges_json(lattice_txn *txn, uint64_t node,
                                   bool outgoing, const char *type, char **out) {
@@ -320,19 +414,22 @@ int32_t lattice_bridge_edges_json(lattice_txn *txn, uint64_t node,
   for (uint32_t i = 0; i < count; i++) {
     if (i)
       fputc(',', stream);
-    uint64_t source, target;
+    uint64_t source, target, edge_id = 0;
     const char *edge_type;
     uint32_t edge_type_len;
     code = lattice_edge_result_get(result, i, &source, &target, &edge_type,
                                    &edge_type_len);
+    if (code == LATTICE_OK)
+      code = lattice_edge_result_get_id(result, i, &edge_id);
     if (code != LATTICE_OK) {
       fclose(stream);
       free(buffer);
       lattice_edge_result_free(result);
       return code;
     }
-    fprintf(stream, "{\"source\":%llu,\"target\":%llu,\"type\":",
-            (unsigned long long)source, (unsigned long long)target);
+    fprintf(stream, "{\"id\":%llu,\"source\":%llu,\"target\":%llu,\"type\":",
+            (unsigned long long)edge_id, (unsigned long long)source,
+            (unsigned long long)target);
     json_string(stream, edge_type, edge_type_len);
     fputc('}', stream);
   }

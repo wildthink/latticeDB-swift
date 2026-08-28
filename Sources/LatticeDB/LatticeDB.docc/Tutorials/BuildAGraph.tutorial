@@ -28,4 +28,13 @@
     @TutorialReference(tutorial: "doc:QueryTheGraph")
   }
 
+  @Chapter(name: "Declare and Query") {
+    Model your labels and keys once, then describe graphs as values and query
+    them with patterns the compiler checks.
+
+    @Image(source: "chapter-model.svg", alt: "A network of connected nodes.")
+
+    @TutorialReference(tutorial: "doc:DeclareAndQuery")
+  }
+
 }

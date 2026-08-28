@@ -1,0 +1,134 @@
+@Tutorial(time: 20) {
+  @Intro(title: "Declare and Query") {
+    The same graph, written the declarative way. You will model your labels and
+    properties once, describe a graph as a value, apply it in a transaction, and
+    read it back with queries that are checked by the Swift compiler.
+
+    @Image(source: "chapter-model.svg", alt: "A network of connected nodes.")
+  }
+
+  @Section(title: "Model the vocabulary") {
+    @ContentAndMedia {
+      Labels, edge types, and property keys are values you extend. Naming them
+      once is what makes everything after this both shorter and type-safe.
+    }
+
+    @Steps {
+      @Step {
+        Name the labels and edge types you model. ``NodeType`` and ``EdgeType``
+        are string-backed, so anything you have not modeled still works as a
+        literal.
+
+        @Code(name: "Model.swift", file: "Declare-01.swift")
+      }
+
+      @Step {
+        Declare an entity and its typed keys. The phantom owner on
+        ``PropertyKey`` is what stops a `Place` key from reading a `Person`, and
+        the value type is what stops an `Int` from landing in a name.
+
+        @Code(name: "Model.swift", file: "Declare-02.swift")
+      }
+    }
+  }
+
+  @Section(title: "Declare a graph") {
+    @ContentAndMedia {
+      A ``GraphPlan`` describes nodes and edges without touching the database.
+      It is a value: build it anywhere, inspect it in a test, apply it later.
+    }
+
+    @Steps {
+      @Step {
+        Describe two nodes and the edge between them. A node bound to a `let`
+        joins the plan when an edge references it; a node that stands alone is
+        written as its own statement.
+
+        @Code(name: "Neighborhood.swift", file: "Declare-03.swift")
+      }
+
+      @Step {
+        Apply the plan. Every declaration is written in one transaction, so a
+        failure anywhere leaves the graph as it was. The builder takes `if` and
+        `for`, so a plan can be shaped by data.
+
+        @Code(name: "Neighborhood.swift", file: "Declare-04.swift")
+      }
+
+      @Step {
+        Add a schema. Rules take their kind from the key's Swift type, and the
+        whole plan is validated before the first write.
+
+        @Code(name: "Neighborhood.swift", file: "Declare-05.swift")
+      }
+
+      @Step {
+        Change data that already exists. `Upsert` reuses the node whose indexed
+        property matches, `Connect` creates an edge only when it is missing, and
+        the mutation verbs do the rest.
+
+        @Code(name: "Neighborhood.swift", file: "Declare-06.swift")
+      }
+    }
+  }
+
+  @Section(title: "Query with types") {
+    @ContentAndMedia {
+      ``Query`` builds a pattern from the same keys you declared, and renders it
+      to Cypher with every value bound as a parameter.
+    }
+
+    @Steps {
+      @Step {
+        Filter, project, sort, and page. The value side of each comparison is
+        typed by the key, so a mistake is a compile error rather than an empty
+        result.
+
+        @Code(name: "Queries.swift", file: "TypedQuery-01.swift")
+      }
+
+      @Step {
+        Inspect what will run. A query is a value too, so asserting on its
+        rendered text is a test that needs no database.
+
+        @Code(name: "Queries.swift", file: "TypedQuery-02.swift")
+      }
+
+      @Step {
+        Traverse. Each hop moves the entity that later clauses refer to, which
+        is how the compiler keeps a two-hop query honest.
+
+        @Code(name: "Queries.swift", file: "TypedQuery-03.swift")
+      }
+
+      @Step {
+        Fetch in the shape you need: decoded rows, node identifiers, or a count.
+
+        @Code(name: "Queries.swift", file: "TypedQuery-04.swift")
+      }
+    }
+  }
+
+  @Section(title: "Drop to Cypher, and to the transaction") {
+    @ContentAndMedia {
+      When a pattern outgrows the builder, write the query yourself — still with
+      parameters bound for you.
+    }
+
+    @Steps {
+      @Step {
+        Interpolate values into a ``Cypher`` query. Each one becomes a bound
+        parameter, so a hostile string stays a string.
+
+        @Code(name: "Queries.swift", file: "TypedQuery-05.swift")
+      }
+
+      @Step {
+        Query inside a write when you need to see what you just wrote, and use a
+        ``NodeHandle`` for read-modify-write on a single node.
+
+        @Code(name: "Queries.swift", file: "TypedQuery-06.swift")
+      }
+    }
+  }
+}

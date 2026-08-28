@@ -109,8 +109,8 @@
         Yes — a node may carry several labels, and gain or lose them over time.
 
         @Justification(reaction: "Correct") {
-          Use ``Transaction/addLabel(_:to:)`` and
-          ``Transaction/removeLabel(_:from:)``. This is the main way labels
+          Use `Transaction.addLabel(_:to:)` and
+          `Transaction.removeLabel(_:from:)`. This is the main way labels
           differ from table names.
         }
       }

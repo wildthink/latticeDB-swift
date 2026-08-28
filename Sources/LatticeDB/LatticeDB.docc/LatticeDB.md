@@ -24,6 +24,20 @@ try database.write { transaction in
 let rows = try database.matchJSON("MATCH (p:Person) RETURN p.name")
 ```
 
+Model your labels and properties once, and the same work reads as declarations
+and typed queries:
+
+```swift
+try database.apply {
+  Node(.person) { Person.name .= "Ada Chen" }
+}
+
+let adults = try database.match(Person.self)
+  .where(Person.age >= 21)
+  .select(Person.name)
+  .fetchRows()
+```
+
 New to graph databases? Start with <doc:GraphBasics>, then follow
 <doc:/tutorials/BuildAGraph>.
 
@@ -45,9 +59,49 @@ New to graph databases? Start with <doc:GraphBasics>, then follow
 - ``EdgeID``
 - ``Value``
 
+### Modeling Types and Keys
+
+- ``NodeType``
+- ``EdgeType``
+- ``PropertyKey``
+- ``PropertyKeys``
+- ``GraphNode``
+- ``GraphEdge``
+- ``ValueRepresentable``
+
+### Declaring Graphs
+
+- <doc:DeclarativeGraphs>
+- <doc:BuildingGraphPlans>
+- ``GraphPlan``
+- ``GraphBuilder``
+- ``PropertyBuilder``
+- ``GraphComponent``
+- ``NodeSpec``
+- ``EdgeSpec``
+- ``GraphApplyResult``
+- ``Database/apply(schema:mergeStrategy:_:)``
+
+### Updating
+
+- ``Database/update(schema:mergeStrategy:_:)``
+- ``NodeHandle``
+- ``GraphMutation``
+- ``MergeStrategy``
+- ``NodeIdentity``
+- ``EdgeIdentity``
+
 ### Querying
 
+- <doc:QueryingAndUpdating>
 - <doc:CypherAndJSON>
+- ``Query``
+- ``Predicate``
+- ``Cypher``
+- ``Row``
+- ``NodeSnapshot``
+- ``EdgeSnapshot``
+- ``JSONValue``
 - ``Database/matchJSON(_:parameters:)``
 - ``Database/nodeTypes()``
 - ``Database/nodeSummaryJSON(_:)``
@@ -60,6 +114,8 @@ New to graph databases? Start with <doc:GraphBasics>, then follow
 - ``EdgeSchema``
 - ``PropertyRule``
 - ``ValueKind``
+- ``SchemaBuilder``
+- ``SchemaRule``
 
 ### Temporal Data
 
@@ -83,6 +139,9 @@ New to graph databases? Start with <doc:GraphBasics>, then follow
 
 - ``LatticeError``
 - ``SchemaValidationError``
+- ``GraphPlanError``
+- ``QueryError``
+- ``CypherError``
 - ``TemporalValidityError``
 - ``TemporalQueryError``
 

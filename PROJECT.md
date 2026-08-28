@@ -56,13 +56,25 @@ intentionally leaves testing and committing to the reviewer.
   writable transaction. The closure commits on success and rolls back on error.
 - `Database.matchJSON` is deliberately read-only. The C bridge rejects native
   Cypher queries that report writes before beginning the transaction.
+- `Transaction.matchJSON` runs the same query on the caller's transaction
+  through `lattice_bridge_match_json_txn`, so it observes uncommitted writes.
+  It rejects writing queries the same way, and it never ends the transaction it
+  was given.
 - C strings and JSON buffers have explicit freeing functions. Maintain the
   current paired allocation/free ownership when adding bridge APIs.
 - Query parameters are typed `Value` instances carried through
   `lattice_bridge_parameter`; their string buffers are valid only for the bind
   call, matching LatticeDB's borrowed-value C API contract.
-- Query results intentionally return JSON strings for now. A typed result API
-  should be additive rather than changing `matchJSON`.
+- Typed scalar reads (`lattice_bridge_node_property`,
+  `lattice_bridge_edge_property`) return a `malloc`-owned string released with
+  `lattice_bridge_free_buffer`, not `lattice_bridge_free_string`, which frees
+  engine-owned memory. Keep those two free functions distinct.
+- `lattice_nodes_find_by_label_property` rejects a limit of zero; the Swift
+  wrapper sends the maximum for an unlimited lookup. It reports
+  `LATTICE_ERROR_UNSUPPORTED` when the requested index does not exist.
+- Query results still return JSON strings from the bridge. `Row`, `Query`, and
+  the `match` family decode that JSON in Swift; a typed native result API should
+  replace the decoding source without changing those signatures.
 
 ## Public Feature Boundaries
 
@@ -72,6 +84,14 @@ traversal, indexes, and native Cypher reads with bound scalar parameters.
 `GraphSchema` is advisory application validation. It validates complete
 property dictionaries passed to its creation helpers; it is not persisted and
 does not turn LatticeDB into a schema-enforced database.
+
+`GraphPlan` and its `@GraphBuilder` DSL describe nodes and edges as a value and
+write them through `Transaction` primitives. Reads and writes are deliberately
+asymmetric: `Cypher` and the typed `Database.match` family run native read-only
+queries, while every write goes through the plan or the transaction API, because
+the bridge rejects queries that write. Typed `PropertyKey` reads currently decode
+the bridge's JSON property encoding; replacing that with a typed native read is
+an internal change, not an API one. See `Docs/Plan-BuilderAndQueryAPI.md`.
 
 `TemporalValidity` and `TemporalAsOf` implement an opt-in valid-time property
 convention. They qualify currently stored records using `validFrom`/`validTo`;

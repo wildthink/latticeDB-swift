@@ -92,7 +92,7 @@ public final class Database {
     guard let handle else { throw LatticeError.transactionClosed }
     var native: OpaquePointer?
     try check(lattice_bridge_begin(handle, writable, &native))
-    let transaction = Transaction(native!)
+    let transaction = Transaction(native!, database: handle)
     do {
       let value = try body(transaction)
       try transaction.commit()
@@ -112,7 +112,13 @@ public final class Database {
 public final class Transaction {
   private var handle: OpaquePointer?
 
-  fileprivate init(_ handle: OpaquePointer) { self.handle = handle }
+  /// The database this transaction belongs to, needed to prepare native queries.
+  let database: OpaquePointer?
+
+  fileprivate init(_ handle: OpaquePointer, database: OpaquePointer?) {
+    self.handle = handle
+    self.database = database
+  }
 
   deinit { rollback() }
 
