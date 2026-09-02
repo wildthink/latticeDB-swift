@@ -43,6 +43,7 @@ let package = Package(
   ],
   products: [
     .library(name: "LatticeDB", targets: ["LatticeDB"]),
+    .library(name: "LatticeMemory", targets: ["LatticeMemory"]),
     .executable(name: "lattice", targets: ["lattice"]),
   ],
   dependencies: [
@@ -63,6 +64,10 @@ let package = Package(
         "LatticeBridge"
       ]
     ),
+    .target(
+      name: "LatticeMemory",
+      dependencies: ["LatticeDB"]
+    ),
     .executableTarget(
       name: "lattice",
       dependencies: [
@@ -70,6 +75,7 @@ let package = Package(
         .product(name: "CommandREPL", package: "LineEditor"),
       ]),
     .testTarget(name: "LatticeDBTests", dependencies: ["LatticeDB"]),
+    .testTarget(name: "LatticeMemoryTests", dependencies: ["LatticeMemory"]),
   ],
   swiftLanguageModes: [.v6]
 )

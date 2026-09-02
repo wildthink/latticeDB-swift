@@ -227,6 +227,43 @@ try database.write { transaction in
 }
 let records = try database.readStream("articles.indexed", after: cursor, limit: 100)
 ```
+## Evidence And Assertions
+
+The `LatticeMemory` library is a second product in this package. It stores raw
+**evidence** that is never rewritten, and **assertions** derived from it that
+carry a link back to the evidence — and, where a rule asks for one, the verbatim
+quote they were read from.
+
+Nothing in it is specific to any one domain. A slot is a name you choose, a scope
+dimension is a name you choose, and the built-in extractor is regular
+expressions over text, so the same store suits a configuration history, a
+document-extraction pipeline, or a device's derived state.
+
+```swift
+import LatticeMemory
+
+let store = try MemoryStore(
+    path: "memory.db",
+    schema: ["package.manager": SlotRule(allowedValues: ["npm", "pnpm", "yarn"])],
+    extractors: [
+        PatternExtractor([.init(slot: "package.manager", pattern: #/using (npm|pnpm|yarn)/#)])
+    ]
+)
+
+try store.record(EvidenceDraft(text: "We are using pnpm.", scope: ["project": "acme"]))
+let current = try store.currentAssertions(in: ["project": "acme"])
+let lastMarch = try store.assertions(validAt: date, in: ["project": "acme"])
+```
+
+Three rules do most of the work. Values are **superseded, not overwritten**, so
+`assertions(validAt:in:)` answers what was held to be true at any past moment.
+**Scope is checked on every read**: a record is visible only when every dimension
+it declares appears in the querying scope with the same value. And **extractors
+propose while the store decides** — an extractor has no write access, so one that
+names an undeclared slot, invents a quote, or reaches outside its evidence's
+scope has its proposal refused and reported rather than stored.
+Build its documentation with `make docs-memory`; the articles live in
+`Sources/LatticeMemory/LatticeMemory.docc`.
 ## Demo
 
 Create a small people, places, and events graph for experimentation:
