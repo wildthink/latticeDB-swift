@@ -47,6 +47,19 @@ public final class MemoryStore {
   /// times. Replace it to make ingest reproducible in tests.
   public var clock: @Sendable () -> Date = { Date() }
 
+  /// The durable stream the store publishes its own events to, or `nil` to
+  /// publish none.
+  ///
+  /// Publishing is off by default: a store that defers no work should not pay
+  /// for a stream write on every record. Set a name to have ``record(_:)`` and
+  /// ``forget(_:)`` publish, then turn those events into work with
+  /// ``materialize(stream:worker:limit:)``. Events are published inside the same
+  /// transaction as the change they describe, so an event never exists for a
+  /// write that rolled back.
+  public var eventStream: String?
+
+  /// How many times a job may be leased before it is given up on.
+  public var maximumJobAttempts = 3
 
   /// Opens a store over an existing database.
   ///
@@ -91,8 +104,21 @@ public final class MemoryStore {
     try database.createNodeIndex(label: Labels.note, property: Keys.id)
     try database.createNodeIndex(label: Labels.note, property: Keys.title)
     try database.createFullTextIndex(label: Labels.note, property: Keys.text)
+    try database.createNodeIndex(label: Labels.job, property: Keys.id)
+    try database.createNodeIndex(label: Labels.job, property: Keys.jobKey)
+    try database.createNodeIndex(label: Labels.job, property: Keys.worker)
   }
 
+  /// Publishes one of the store's own events, when an event stream is set.
+  ///
+  /// The caller's transaction is used deliberately: the event and the change it
+  /// announces commit together or not at all.
+  func publishEvent(
+    _ kind: String, _ id: RecordID, in transaction: Transaction
+  ) throws {
+    guard let eventStream else { return }
+    try transaction.publish(.string(id.rawValue), to: eventStream, kind: kind)
+  }
 
   // MARK: - Reading
 
@@ -256,6 +282,7 @@ public final class MemoryStore {
     static let evidence = "Evidence"
     static let assertion = "Assertion"
     static let note = "Note"
+    static let job = "Job"
   }
 
   enum Edges {
@@ -286,6 +313,15 @@ public final class MemoryStore {
     static let category = "category"
     static let title = "title"
     static let updatedAt = "updatedAt"
+    static let jobKey = "jobKey"
+    static let stream = "stream"
+    static let sequence = "sequence"
+    static let worker = "worker"
+    static let payload = "payload"
+    static let attempts = "attempts"
+    static let leaseExpiresAt = "leaseExpiresAt"
+    static let lastError = "lastError"
+    static let createdAt = "createdAt"
     /// The property a record's embedding is stored under.
     static let embedding = "embedding"
   }

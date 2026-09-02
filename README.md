@@ -227,6 +227,7 @@ try database.write { transaction in
 }
 let records = try database.readStream("articles.indexed", after: cursor, limit: 100)
 ```
+
 ## Evidence And Assertions
 
 The `LatticeMemory` library is a second product in this package. It stores raw
@@ -262,6 +263,7 @@ it declares appears in the querying scope with the same value. And **extractors
 propose while the store decides** — an extractor has no write access, so one that
 names an undeclared slot, invents a quote, or reaches outside its evidence's
 scope has its proposal refused and reported rather than stored.
+
 `retrieve` returns a bounded, scoped, ranked set of records — and an account of
 everything it left out, so a result that is smaller than expected explains
 itself rather than looking like an empty store:
@@ -285,6 +287,7 @@ Ranking is lexical by default, and hybrid — BM25 and vectors fused by reciproc
 rank — when the store is given a `TextEmbedder`. `HashEmbedder` needs no network
 and is deterministic; `RemoteEmbedder` wraps an HTTP embedding service. A
 `Budget` counts characters, items, or whatever you supply a measure for.
+
 `forget` removes a record and everything concluded from it. An assertion that
 loses all of its supporting evidence is retracted and redacted — including the
 quote, which is a verbatim copy of the text being forgotten; one that keeps some
@@ -299,6 +302,7 @@ preview.weakenedAssertions    // lost some, survived on the rest
 try store.forget(.identifiers([record.id]))               // tombstone: identity survives
 try store.forget(.identifiers([record.id], mode: .erase)) // erase: nothing survives
 ```
+
 A `Consolidator` folds many records into one conclusion citing all of them, so
 forgetting any input weakens it and forgetting all of them retracts it — the
 provenance machinery needs no special case for summaries. `DigestConsolidator`
@@ -315,8 +319,30 @@ try store.consolidate(
 try store.pin("Readings are uncalibrated below 5°C.", title: "caveat",
               scope: ["device": "sensor-4"])
 ```
+
+Slow or fallible work belongs after a write, not inside it. Setting an event
+stream makes each change publish to a durable stream in the same transaction;
+`materialize` turns those records into leased `Job` nodes keyed by
+`{stream, sequence, worker}`, so it is safe to run on a timer and work survives
+the process that triggered it:
+
+```swift
+store.eventStream = "memory.events"
+try store.record(EvidenceDraft(text: "…"))   // publishes an event
+
+try store.materialize(stream: "memory.events", worker: "embedder")
+try store.run(worker: "embedder", count: 10) { job in
+    guard case .string(let id) = job.payload else { return }
+    try backfillEmbedding(for: RecordID(id))
+}
+```
+
+A lease is a deadline rather than a lock, so a crashed worker does not strand
+work — and handlers must therefore tolerate running twice.
+
 Build its documentation with `make docs-memory`; the articles live in
 `Sources/LatticeMemory/LatticeMemory.docc`.
+
 ## Demo
 
 Create a small people, places, and events graph for experimentation:

@@ -33,6 +33,9 @@ Three rules do most of the work:
   all of them.
 - **Forgetting propagates.** ``MemoryStore/forget(_:)`` removes a record and
   every conclusion that rested on it, including the quotes copied out of it.
+- **Slow work happens later, durably.** A change can publish an event that
+  ``MemoryStore/materialize(stream:worker:limit:)`` turns into leased ``Job``
+  records, so work triggered by a write outlives the process that triggered it.
 
 Nothing here is specific to any one domain. A slot is a name you choose; a scope
 dimension is a name you choose; ``PatternExtractor`` is regular expressions over
@@ -62,6 +65,7 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 - <doc:Retrieval>
 - <doc:Consolidation>
 - <doc:Forgetting>
+- <doc:DeferredWork>
 - ``MemoryStore``
 - ``Scope``
 - ``RecordID``
@@ -125,6 +129,24 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 - ``ForgetReport``
 - ``WeakenedAssertion``
 - ``ForgetError``
+
+### Deferred Work
+
+- <doc:DeferredWork>
+- ``MemoryStore/eventStream``
+- ``MemoryStore/EventKind``
+- ``MemoryStore/materialize(stream:worker:limit:)``
+- ``MemoryStore/lease(worker:count:duration:)``
+- ``MemoryStore/run(worker:count:lease:_:)``
+- ``MemoryStore/complete(_:)``
+- ``MemoryStore/fail(_:error:)``
+- ``MemoryStore/retry(_:)``
+- ``MemoryStore/jobs(worker:state:)``
+- ``MemoryStore/job(_:)``
+- ``MemoryStore/pruneJobs(worker:includingFailed:)``
+- ``Job``
+- ``JobState``
+- ``JobRunReport``
 
 ### Explaining a Result
 

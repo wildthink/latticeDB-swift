@@ -83,6 +83,7 @@ extension MemoryStore {
         throw MemoryError.duplicateIdentifier(evidence.id)
       }
       let node = try write(evidence, vectors: vectors, in: transaction)
+      try publishEvent(EventKind.evidenceRecorded, evidence.id, in: transaction)
       var asserted: [Assertion] = []
       var superseded: [RecordID] = []
       for proposal in proposals {

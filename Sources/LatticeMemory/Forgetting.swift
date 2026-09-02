@@ -220,6 +220,7 @@ extension MemoryStore {
       }
 
       for id in report.evidence {
+        try publishEvent(EventKind.evidenceForgotten, id, in: transaction)
         guard let node = try locate(id, label: Labels.evidence, in: transaction) else { continue }
         if request.mode == .tombstone {
           try redactEvidence(node, at: now, in: transaction)
