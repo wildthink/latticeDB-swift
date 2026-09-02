@@ -28,6 +28,9 @@ Three rules do most of the work:
 - **Retrieval explains itself.** ``MemoryStore/retrieve(_:)`` returns a bounded,
   scoped, ranked set of records and a ``RetrievalTrace`` accounting for every
   candidate it discarded.
+- **Some things are not ranked.** A ``PinnedNote`` is always included within its
+  scope, and a ``Consolidator`` folds many records into one conclusion that cites
+  all of them.
 - **Forgetting propagates.** ``MemoryStore/forget(_:)`` removes a record and
   every conclusion that rested on it, including the quotes copied out of it.
 
@@ -57,6 +60,7 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 
 - <doc:EvidenceAndAssertions>
 - <doc:Retrieval>
+- <doc:Consolidation>
 - <doc:Forgetting>
 - ``MemoryStore``
 - ``Scope``
@@ -82,6 +86,21 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 - ``PatternExtractor``
 - ``AssertionProposal``
 - ``IngestResult``
+
+### Consolidating and Pinning
+
+- <doc:Consolidation>
+- ``MemoryStore/assert(_:from:)-(AssertionProposal,[RecordID])``
+- ``MemoryStore/consolidate(_:using:)``
+- ``Consolidator``
+- ``DigestConsolidator``
+- ``ConsolidationRequest``
+- ``ConsolidationResult``
+- ``PinnedNote``
+- ``MemoryStore/pin(_:title:scope:)``
+- ``MemoryStore/unpin(_:)``
+- ``MemoryStore/notes(in:)``
+- ``MemoryStore/note(title:scope:)``
 
 ### Retrieval
 

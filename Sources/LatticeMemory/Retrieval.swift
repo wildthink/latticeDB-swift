@@ -14,8 +14,11 @@ public struct RecordKinds: OptionSet, Sendable {
   /// Raw records.
   public static let evidence = RecordKinds(rawValue: 1 << 1)
 
-  /// Both.
-  public static let all: RecordKinds = [.assertions, .evidence]
+  /// Pinned notes, which are always included rather than ranked.
+  public static let notes = RecordKinds(rawValue: 1 << 2)
+
+  /// Everything.
+  public static let all: RecordKinds = [.assertions, .evidence, .notes]
 }
 
 /// How candidates are found and ranked.
@@ -119,6 +122,7 @@ public struct RetrievalRequest: Sendable {
 public enum RetrievedRecord: Sendable {
   case evidence(Evidence)
   case assertion(Assertion)
+  case note(PinnedNote)
 }
 
 /// One retrieved record, with why it ranked where it did and what it cost.
@@ -138,6 +142,7 @@ public struct RetrievedItem: Sendable {
     switch record {
     case .evidence(let evidence): return evidence.id
     case .assertion(let assertion): return assertion.id
+    case .note(let note): return note.id
     }
   }
 
@@ -146,6 +151,7 @@ public struct RetrievedItem: Sendable {
     switch record {
     case .evidence(let evidence): return evidence.text
     case .assertion(let assertion): return assertion.text
+    case .note(let note): return note.text
     }
   }
 }
@@ -240,7 +246,8 @@ extension MemoryStore {
   ///
   /// The pipeline is deterministic in its filtering, whatever the ranking does:
   ///
-  /// 1. Generate candidates in the requested ``SearchMode``.
+  /// 1. Put the scope's pinned notes first, then generate ranked candidates in
+  ///    the requested ``SearchMode``.
   /// 2. Drop anything outside ``RetrievalRequest/scope``.
   /// 3. Drop assertions that did not hold at ``RetrievalRequest/validAt``, and
   ///    evidence outside ``RetrievalRequest/occurredIn``.
@@ -254,7 +261,15 @@ extension MemoryStore {
   /// smaller than expected explains itself.
   public func retrieve(_ request: RetrievalRequest) throws -> RetrievalResult {
     let mode = resolve(request.mode, for: request)
-    let ranked = try candidates(for: request, mode: mode)
+    // Pinned notes are not ranked — they lead, so they get first claim on the
+    // budget. A note that only sometimes survives is not pinned to anything.
+    let pinned =
+      request.kinds.contains(.notes)
+      ? try notes(in: request.scope).map {
+        Candidate(record: .note($0), score: .infinity)
+      }
+      : []
+    let ranked = pinned + (try candidates(for: request, mode: mode))
 
     var dropped: [DropReason: Int] = [:]
     func drop(_ reason: DropReason) { dropped[reason, default: 0] += 1 }
@@ -290,6 +305,8 @@ extension MemoryStore {
             continue
           }
         }
+      case .note:
+        break
       case .evidence(let evidence):
         guard request.kinds.contains(.evidence) else {
           drop(.notRequested)
@@ -371,6 +388,7 @@ extension MemoryStore {
     var byCategory: [String: [RetrievedItem]] = [:]
     var order: [String] = []
     var evidence: [RetrievedItem] = []
+    var notes: [RetrievedItem] = []
     for item in items {
       switch item.record {
       case .assertion(let assertion):
@@ -379,9 +397,12 @@ extension MemoryStore {
         byCategory[title, default: []].append(item)
       case .evidence:
         evidence.append(item)
+      case .note:
+        notes.append(item)
       }
     }
-    var sections = order.map { RetrievalSection(title: $0, items: byCategory[$0] ?? []) }
+    var sections = notes.isEmpty ? [] : [RetrievalSection(title: "Notes", items: notes)]
+    sections += order.map { RetrievalSection(title: $0, items: byCategory[$0] ?? []) }
     if !evidence.isEmpty { sections.append(RetrievalSection(title: "Evidence", items: evidence)) }
     return sections
   }

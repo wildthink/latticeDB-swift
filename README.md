@@ -299,6 +299,22 @@ preview.weakenedAssertions    // lost some, survived on the rest
 try store.forget(.identifiers([record.id]))               // tombstone: identity survives
 try store.forget(.identifiers([record.id], mode: .erase)) // erase: nothing survives
 ```
+A `Consolidator` folds many records into one conclusion citing all of them, so
+forgetting any input weakens it and forgetting all of them retracts it — the
+provenance machinery needs no special case for summaries. `DigestConsolidator`
+concatenates deterministically; a real summarizer plugs into the same contract.
+A `PinnedNote` is authored rather than derived and is always retrieved within its
+scope, getting first claim on the budget:
+
+```swift
+try store.consolidate(
+    .matching(kinds: ["log"], occurredIn: lastWeek),
+    using: DigestConsolidator(slot: "week.digest")
+)
+
+try store.pin("Readings are uncalibrated below 5°C.", title: "caveat",
+              scope: ["device": "sensor-4"])
+```
 Build its documentation with `make docs-memory`; the articles live in
 `Sources/LatticeMemory/LatticeMemory.docc`.
 ## Demo

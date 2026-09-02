@@ -86,12 +86,12 @@ extension MemoryStore {
       var asserted: [Assertion] = []
       var superseded: [RecordID] = []
       for proposal in proposals {
-        switch validate(proposal, against: evidence) {
+        switch validate(proposal, against: [evidence]) {
         case .failure(let reason):
           rejected.append(Rejection(proposal: proposal, reason: reason))
         case .success(let checked):
           let outcome = try commit(
-            checked, from: evidence, evidenceNode: node, now: now, vectors: vectors,
+            checked, from: [evidence], evidenceNodes: [node], now: now, vectors: vectors,
             in: transaction)
           if let assertion = outcome.assertion { asserted.append(assertion) }
           superseded.append(contentsOf: outcome.superseded)
@@ -115,19 +115,41 @@ extension MemoryStore {
   ///   assertion, so it cannot be reported by omission.
   @discardableResult
   public func assert(_ proposal: AssertionProposal, from evidence: RecordID) throws -> Assertion {
+    try assert(proposal, from: [evidence])
+  }
+
+  /// Writes one assertion supported by several records at once.
+  ///
+  /// This is what a conclusion drawn from a body of evidence looks like: a
+  /// summary of a week of records, a value corroborated by three sources, a
+  /// judgement that needed all of them. Every cited record gets a provenance
+  /// edge, so forgetting any one of them weakens the assertion and forgetting
+  /// all of them retracts it — see ``forget(_:)``.
+  ///
+  /// - Throws: ``MemoryError/unknownRecord(_:)`` when a citation is not in the
+  ///   store, or ``Rejection`` when the proposal fails validation.
+  @discardableResult
+  public func assert(
+    _ proposal: AssertionProposal, from evidence: [RecordID]
+  ) throws -> Assertion {
     let now = clock()
     let vectors = try embed([proposal.text])
     return try database.write { transaction in
-      guard let node = try locate(evidence, label: Labels.evidence, in: transaction) else {
-        throw MemoryError.unknownRecord(evidence)
+      var nodes: [NodeID] = []
+      var stored: [Evidence] = []
+      for id in evidence {
+        guard let node = try locate(id, label: Labels.evidence, in: transaction) else {
+          throw MemoryError.unknownRecord(id)
+        }
+        nodes.append(node)
+        stored.append(try readEvidence(node, in: transaction))
       }
-      let stored = try readEvidence(node, in: transaction)
       switch validate(proposal, against: stored) {
       case .failure(let reason):
         throw Rejection(proposal: proposal, reason: reason)
       case .success(let checked):
         let outcome = try commit(
-          checked, from: stored, evidenceNode: node, now: now, vectors: vectors,
+          checked, from: stored, evidenceNodes: nodes, now: now, vectors: vectors,
           in: transaction)
         guard let assertion = outcome.assertion else {
           throw Rejection(proposal: proposal, reason: .disallowedValue(proposal.text))
@@ -165,8 +187,15 @@ extension MemoryStore {
     var validFrom: Date
   }
 
+  /// Checks a proposal against the schema and against every record it cites.
+  ///
+  /// With more than one citation the rules loosen in one place and tighten in
+  /// another: a quote need only appear in *one* of the records, since that is
+  /// where it was read from, but the scope must contain *all* of them, so a
+  /// conclusion cannot be written into a context narrower than something it
+  /// rests on.
   func validate(
-    _ proposal: AssertionProposal, against evidence: Evidence
+    _ proposal: AssertionProposal, against evidence: [Evidence]
   ) -> Result<CheckedProposal, RejectionReason> {
     guard let rule = schema.rule(for: proposal.slot) else {
       return .failure(.undeclaredSlot(proposal.slot))
@@ -180,21 +209,46 @@ extension MemoryStore {
       guard allowed.contains(text) else { return .failure(.disallowedValue(text)) }
     }
     if let quote = proposal.quote {
-      guard evidence.text.contains(quote) else { return .failure(.unfaithfulQuote(quote)) }
+      guard evidence.contains(where: { $0.text.contains(quote) }) else {
+        return .failure(.unfaithfulQuote(quote))
+      }
     } else if rule.requiresQuote {
       return .failure(.missingQuote)
     }
     guard (0...1).contains(proposal.confidence) else {
       return .failure(.invalidConfidence(proposal.confidence))
     }
-    let scope = proposal.scope ?? evidence.scope
-    guard scope.contains(evidence.scope) else {
-      return .failure(.scopeEscapesEvidence(proposed: scope, evidence: evidence.scope))
+    // With no explicit scope, a conclusion drawn from several records belongs to
+    // the narrowest context that covers all of them.
+    let scope = proposal.scope ?? merge(evidence.map(\.scope))
+    for source in evidence where !scope.contains(source.scope) {
+      return .failure(.scopeEscapesEvidence(proposed: scope, evidence: source.scope))
     }
+    // A conclusion is not true until the last record supporting it exists.
+    let latest = evidence.map(\.occurredAt).max() ?? Date()
     return .success(
       CheckedProposal(
         proposal: proposal, rule: rule, scope: scope,
-        validFrom: proposal.validFrom ?? evidence.occurredAt))
+        validFrom: proposal.validFrom ?? latest))
+  }
+
+  /// Merges scopes by taking every dimension any of them declares.
+  ///
+  /// The result is as narrow as the narrowest source, which is the safe
+  /// direction: a conclusion drawn partly from one user's record must not be
+  /// readable by a query that never named that user. Taking only the dimensions
+  /// the sources share would widen it instead, and widening is how data leaks.
+  ///
+  /// When two sources give different values for one dimension, the merged scope
+  /// keeps one of them and so fails to contain the other. That failure is the
+  /// intended outcome — there is no scope covering both, and the caller is told
+  /// so rather than having the conclusion filed somewhere it does not belong.
+  private func merge(_ scopes: [Scope]) -> Scope {
+    var merged: [String: String] = [:]
+    for scope in scopes {
+      for (dimension, value) in scope.dimensions { merged[dimension] = value }
+    }
+    return Scope(merged)
   }
 
   /// The scalar kind of a stored value.
@@ -213,13 +267,13 @@ extension MemoryStore {
 
   // MARK: - Writing
 
-  private struct CommitOutcome {
+  struct CommitOutcome {
     var assertion: Assertion?
     var superseded: [RecordID]
   }
 
-  private func commit(
-    _ checked: CheckedProposal, from evidence: Evidence, evidenceNode: NodeID, now: Date,
+  func commit(
+    _ checked: CheckedProposal, from evidence: [Evidence], evidenceNodes: [NodeID], now: Date,
     vectors: [String: [Float]], in transaction: Transaction
   ) throws -> CommitOutcome {
     let existing = try currentNodes(
@@ -251,13 +305,15 @@ extension MemoryStore {
       state: .current,
       validFrom: checked.validFrom,
       validTo: nil,
-      evidence: [evidence.id],
+      evidence: evidence.map(\.id),
       quote: checked.proposal.quote,
       confidence: checked.proposal.confidence,
       category: checked.rule.category)
 
     let node = try write(assertion, vectors: vectors, in: transaction)
-    _ = try transaction.createEdge(from: node, to: evidenceNode, type: Edges.evidencedBy)
+    for evidenceNode in evidenceNodes {
+      _ = try transaction.createEdge(from: node, to: evidenceNode, type: Edges.evidencedBy)
+    }
     for replaced in superseded {
       if let old = try locate(replaced, label: Labels.assertion, in: transaction) {
         _ = try transaction.createEdge(from: node, to: old, type: Edges.supersedes)
@@ -306,7 +362,7 @@ extension MemoryStore {
   /// An embedder that throws fails the whole ingest. A store where some records
   /// carry vectors and others silently do not would rank them against each other
   /// as though the gap were a judgement about relevance.
-  private func embed(_ texts: [String]) throws -> [String: [Float]] {
+  func embed(_ texts: [String]) throws -> [String: [Float]] {
     guard let embedder else { return [:] }
     var vectors: [String: [Float]] = [:]
     for text in Set(texts) where !text.isEmpty {

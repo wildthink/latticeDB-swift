@@ -88,6 +88,9 @@ public final class MemoryStore {
     try database.createNodeIndex(label: Labels.assertion, property: Keys.slot)
     try database.createFullTextIndex(label: Labels.evidence, property: Keys.text)
     try database.createFullTextIndex(label: Labels.assertion, property: Keys.text)
+    try database.createNodeIndex(label: Labels.note, property: Keys.id)
+    try database.createNodeIndex(label: Labels.note, property: Keys.title)
+    try database.createFullTextIndex(label: Labels.note, property: Keys.text)
   }
 
 
@@ -252,6 +255,7 @@ public final class MemoryStore {
   enum Labels {
     static let evidence = "Evidence"
     static let assertion = "Assertion"
+    static let note = "Note"
   }
 
   enum Edges {
@@ -280,6 +284,8 @@ public final class MemoryStore {
     static let quote = "quote"
     static let confidence = "confidence"
     static let category = "category"
+    static let title = "title"
+    static let updatedAt = "updatedAt"
     /// The property a record's embedding is stored under.
     static let embedding = "embedding"
   }

@@ -285,41 +285,14 @@ extension MemoryStore {
     return true
   }
 
-  /// Finds the evidence a request selects.
-  ///
-  /// Scope matches the stored scope exactly rather than by visibility:
-  /// forgetting is destructive, and a broad context must not reach records that
-  /// merely happen to be visible from it. Tombstones are skipped, since one has
-  /// nothing left to remove and counting it again would double-report a closure.
   private func select(
     _ request: ForgetRequest, in transaction: Transaction
   ) throws -> (targets: [RecordID], wasTruncated: Bool) {
-    var nodes: [NodeID] = []
-    if !request.identifiers.isEmpty {
-      nodes = try request.identifiers.compactMap {
-        try locate($0, label: Labels.evidence, in: transaction)
-      }
-    } else if let query = request.query {
-      nodes = try transaction.fullTextSearch(
-        query, label: Labels.evidence, property: Keys.text, limit: request.limit + 1
-      ).map(\.node)
-    } else {
-      nodes = try transaction.nodeIDs(label: Labels.evidence)
-    }
-
-    var targets: [RecordID] = []
-    for node in nodes {
-      let evidence = try readEvidence(node, in: transaction)
-      if evidence.isForgotten { continue }
-      if let scope = request.scope, evidence.scope != scope { continue }
-      if let kinds = request.evidenceKinds, !kinds.contains(evidence.kind) { continue }
-      if let window = request.occurredIn, !window.contains(evidence.occurredAt) { continue }
-      targets.append(evidence.id)
-      if targets.count > request.limit {
-        return (Array(targets.prefix(request.limit)), true)
-      }
-    }
-    return (targets, false)
+    let selection = try selectEvidence(
+      identifiers: request.identifiers, query: request.query, scope: request.scope,
+      kinds: request.evidenceKinds, occurredIn: request.occurredIn, limit: request.limit,
+      in: transaction)
+    return (selection.evidence.map(\.id), selection.wasTruncated)
   }
 
   // MARK: - Redaction
