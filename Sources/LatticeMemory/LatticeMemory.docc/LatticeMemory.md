@@ -25,6 +25,9 @@ Three rules do most of the work:
   one project's data cannot answer another project's question.
 - **Extractors propose; the store decides.** An ``Extractor`` can suggest
   anything. The ``MemorySchema`` decides what is actually written.
+- **Retrieval explains itself.** ``MemoryStore/retrieve(_:)`` returns a bounded,
+  scoped, ranked set of records and a ``RetrievalTrace`` accounting for every
+  candidate it discarded.
 
 Nothing here is specific to any one domain. A slot is a name you choose; a scope
 dimension is a name you choose; ``PatternExtractor`` is regular expressions over
@@ -51,6 +54,7 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 ### Essentials
 
 - <doc:EvidenceAndAssertions>
+- <doc:Retrieval>
 - ``MemoryStore``
 - ``Scope``
 - ``RecordID``
@@ -75,6 +79,30 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 - ``PatternExtractor``
 - ``AssertionProposal``
 - ``IngestResult``
+
+### Retrieval
+
+- <doc:Retrieval>
+- ``MemoryStore/retrieve(_:)``
+- ``RetrievalRequest``
+- ``RetrievalResult``
+- ``RetrievedItem``
+- ``RetrievedRecord``
+- ``RetrievalSection``
+- ``SearchMode``
+- ``RecordKinds``
+- ``Budget``
+
+### Explaining a Result
+
+- ``RetrievalTrace``
+- ``DropReason``
+
+### Embedding
+
+- ``TextEmbedder``
+- ``HashEmbedder``
+- ``RemoteEmbedder``
 
 ### Errors and Refusals
 

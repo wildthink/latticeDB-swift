@@ -73,12 +73,16 @@ extension MemoryStore {
       }
     }
 
+    // Embedding happens before the transaction opens. A remote embedder blocks
+    // on the network, and a write transaction holds its lock for as long as it
+    // is open, so the two must not overlap.
+    let vectors = try embed([evidence.text] + proposals.map(\.text))
 
     return try database.write { transaction in
       if try locate(evidence.id, label: Labels.evidence, in: transaction) != nil {
         throw MemoryError.duplicateIdentifier(evidence.id)
       }
-      let node = try write(evidence, in: transaction)
+      let node = try write(evidence, vectors: vectors, in: transaction)
       var asserted: [Assertion] = []
       var superseded: [RecordID] = []
       for proposal in proposals {
@@ -87,7 +91,8 @@ extension MemoryStore {
           rejected.append(Rejection(proposal: proposal, reason: reason))
         case .success(let checked):
           let outcome = try commit(
-            checked, from: evidence, evidenceNode: node, now: now, in: transaction)
+            checked, from: evidence, evidenceNode: node, now: now, vectors: vectors,
+            in: transaction)
           if let assertion = outcome.assertion { asserted.append(assertion) }
           superseded.append(contentsOf: outcome.superseded)
         }
@@ -111,6 +116,7 @@ extension MemoryStore {
   @discardableResult
   public func assert(_ proposal: AssertionProposal, from evidence: RecordID) throws -> Assertion {
     let now = clock()
+    let vectors = try embed([proposal.text])
     return try database.write { transaction in
       guard let node = try locate(evidence, label: Labels.evidence, in: transaction) else {
         throw MemoryError.unknownRecord(evidence)
@@ -121,7 +127,8 @@ extension MemoryStore {
         throw Rejection(proposal: proposal, reason: reason)
       case .success(let checked):
         let outcome = try commit(
-          checked, from: stored, evidenceNode: node, now: now, in: transaction)
+          checked, from: stored, evidenceNode: node, now: now, vectors: vectors,
+          in: transaction)
         guard let assertion = outcome.assertion else {
           throw Rejection(proposal: proposal, reason: .disallowedValue(proposal.text))
         }
@@ -213,7 +220,7 @@ extension MemoryStore {
 
   private func commit(
     _ checked: CheckedProposal, from evidence: Evidence, evidenceNode: NodeID, now: Date,
-    in transaction: Transaction
+    vectors: [String: [Float]], in transaction: Transaction
   ) throws -> CommitOutcome {
     let existing = try currentNodes(
       slot: checked.proposal.slot, scope: checked.scope, in: transaction)
@@ -249,7 +256,7 @@ extension MemoryStore {
       confidence: checked.proposal.confidence,
       category: checked.rule.category)
 
-    let node = try write(assertion, in: transaction)
+    let node = try write(assertion, vectors: vectors, in: transaction)
     _ = try transaction.createEdge(from: node, to: evidenceNode, type: Edges.evidencedBy)
     for replaced in superseded {
       if let old = try locate(replaced, label: Labels.assertion, in: transaction) {
@@ -293,7 +300,32 @@ extension MemoryStore {
     return RecordID(id)
   }
 
-  private func write(_ evidence: Evidence, in transaction: Transaction) throws -> NodeID {
+  /// Returns the embedding of every distinct text, or nothing when the store has
+  /// no embedder.
+  ///
+  /// An embedder that throws fails the whole ingest. A store where some records
+  /// carry vectors and others silently do not would rank them against each other
+  /// as though the gap were a judgement about relevance.
+  private func embed(_ texts: [String]) throws -> [String: [Float]] {
+    guard let embedder else { return [:] }
+    var vectors: [String: [Float]] = [:]
+    for text in Set(texts) where !text.isEmpty {
+      vectors[text] = try embedder.embed(text)
+    }
+    return vectors
+  }
+
+  private func setVector(
+    _ text: String, from vectors: [String: [Float]], onNode node: NodeID,
+    in transaction: Transaction
+  ) throws {
+    guard let vector = vectors[text] else { return }
+    try transaction.setVector(vector, forKey: Keys.embedding, onNode: node)
+  }
+
+  private func write(
+    _ evidence: Evidence, vectors: [String: [Float]], in transaction: Transaction
+  ) throws -> NodeID {
     let node = try transaction.createNode(label: Labels.evidence)
     try transaction.setProperty(Keys.id, onNode: node, to: .string(evidence.id.rawValue))
     try transaction.setProperty(Keys.kind, onNode: node, to: .string(evidence.kind))
@@ -312,10 +344,13 @@ extension MemoryStore {
       try transaction.setProperty(
         Keys.metadataPrefix + key, onNode: node, to: evidence.metadata[key] ?? .null)
     }
+    try setVector(evidence.text, from: vectors, onNode: node, in: transaction)
     return node
   }
 
-  private func write(_ assertion: Assertion, in transaction: Transaction) throws -> NodeID {
+  private func write(
+    _ assertion: Assertion, vectors: [String: [Float]], in transaction: Transaction
+  ) throws -> NodeID {
     let node = try transaction.createNode(label: Labels.assertion)
     try transaction.setProperty(Keys.id, onNode: node, to: .string(assertion.id.rawValue))
     try transaction.setProperty(Keys.slot, onNode: node, to: .string(assertion.slot.rawValue))
@@ -333,6 +368,7 @@ extension MemoryStore {
       Keys.confidence, onNode: node, to: .double(assertion.confidence))
     try transaction.setProperty(
       Keys.category, onNode: node, to: assertion.category.map { .string($0) } ?? .null)
+    try setVector(assertion.text, from: vectors, onNode: node, in: transaction)
     return node
   }
 }

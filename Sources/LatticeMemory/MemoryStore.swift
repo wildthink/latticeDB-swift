@@ -35,6 +35,14 @@ public final class MemoryStore {
   /// The extractors run over every recorded piece of evidence, in order.
   public var extractors: [any Extractor]
 
+  /// Turns stored text into vectors, enabling ``SearchMode/vector`` and
+  /// ``SearchMode/hybrid`` retrieval.
+  ///
+  /// With no embedder, records are stored without vectors and retrieval falls
+  /// back to lexical ranking. Adding one later does not embed what is already
+  /// stored.
+  public let embedder: (any TextEmbedder)?
+
   /// The clock the store reads for recording times and default valid-from
   /// times. Replace it to make ingest reproducible in tests.
   public var clock: @Sendable () -> Date = { Date() }
@@ -44,21 +52,34 @@ public final class MemoryStore {
   ///
   /// This declares the indexes the store needs, which is idempotent: opening an
   /// existing store again is safe and changes nothing.
-  public init(database: Database, schema: MemorySchema, extractors: [any Extractor] = []) throws {
+  /// When an `embedder` is given, `database` must have been opened with
+  /// `DatabaseConfiguration.vectorDimensions` equal to the
+  /// embedder's width. The path-based initializer arranges that for you.
+  public init(
+    database: Database, schema: MemorySchema, extractors: [any Extractor] = [],
+    embedder: (any TextEmbedder)? = nil
+  ) throws {
     self.database = database
     self.schema = schema
     self.extractors = extractors
+    self.embedder = embedder
     try installIndexes()
   }
 
   /// Opens a store over a database at `path`, creating it when missing.
+  ///
+  /// An `embedder` sets the database's vector width to match it. A store opened
+  /// once with an embedder must be opened with the same width every time after,
+  /// because the width is recorded in the file.
   public convenience init(
     path: String, schema: MemorySchema, extractors: [any Extractor] = [],
-    configuration: DatabaseConfiguration = .init()
+    embedder: (any TextEmbedder)? = nil, configuration: DatabaseConfiguration = .init()
   ) throws {
+    var configuration = configuration
+    if let embedder { configuration.vectorDimensions = embedder.dimensions }
     try self.init(
       database: try Database(path: path, configuration: configuration), schema: schema,
-      extractors: extractors)
+      extractors: extractors, embedder: embedder)
   }
 
   private func installIndexes() throws {
@@ -211,6 +232,8 @@ public final class MemoryStore {
     static let quote = "quote"
     static let confidence = "confidence"
     static let category = "category"
+    /// The property a record's embedding is stored under.
+    static let embedding = "embedding"
   }
 
   /// Returns the node holding `id`, or `nil` when the store holds no such record.

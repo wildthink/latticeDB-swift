@@ -262,6 +262,29 @@ it declares appears in the querying scope with the same value. And **extractors
 propose while the store decides** — an extractor has no write access, so one that
 names an undeclared slot, invents a quote, or reaches outside its evidence's
 scope has its proposal refused and reported rather than stored.
+`retrieve` returns a bounded, scoped, ranked set of records — and an account of
+everything it left out, so a result that is smaller than expected explains
+itself rather than looking like an empty store:
+
+```swift
+let result = try store.retrieve(
+    RetrievalRequest(
+        query: "which package manager",
+        scope: ["project": "acme"],
+        budget: .characters(2_000)
+    )
+)
+
+result.items                       // the ranking
+result.sections                    // grouped for assembly into a document
+result.trace.candidates            // what ranking produced, before filtering
+result.trace.dropped[.outOfScope]  // how many the scope excluded
+```
+
+Ranking is lexical by default, and hybrid — BM25 and vectors fused by reciprocal
+rank — when the store is given a `TextEmbedder`. `HashEmbedder` needs no network
+and is deterministic; `RemoteEmbedder` wraps an HTTP embedding service. A
+`Budget` counts characters, items, or whatever you supply a measure for.
 Build its documentation with `make docs-memory`; the articles live in
 `Sources/LatticeMemory/LatticeMemory.docc`.
 ## Demo
