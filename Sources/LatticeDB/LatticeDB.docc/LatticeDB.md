@@ -131,6 +131,42 @@ New to graph databases? Start with <doc:GraphBasics>, then follow
 - ``Database/createEdgeIndex(type:property:)``
 - ``Database/dropEdgeIndex(type:property:)``
 
+### Full-Text Search
+
+- <doc:SearchingAndRanking>
+- ``Database/createFullTextIndex(label:property:)``
+- ``Database/dropFullTextIndex(label:property:)``
+- ``Database/fullTextIndexExists(label:property:)``
+- ``Database/createFullTextIndex(edgeType:property:)``
+- ``Database/dropFullTextIndex(edgeType:property:)``
+- ``Database/fullTextIndexExists(edgeType:property:)``
+- ``Database/fullTextSearch(_:label:property:limit:fuzzy:)``
+- ``Transaction/fullTextSearch(_:label:property:limit:fuzzy:)``
+- ``TextMatch``
+- ``FuzzyMatching``
+
+### Vectors and Embeddings
+
+- ``Transaction/setVector(_:forKey:onNode:)``
+- ``Database/vectorSearch(_:limit:efSearch:)``
+- ``Transaction/vectorSearch(_:limit:efSearch:)``
+- ``VectorMatch``
+- ``Embedding``
+- ``EmbeddingClient``
+- ``EmbeddingConfiguration``
+- ``EmbeddingAPIFormat``
+
+### Durable Streams
+
+- <doc:DurableStreams>
+- ``Transaction/publish(_:to:kind:)``
+- ``Database/readStream(_:after:limit:timeout:)``
+- ``Database/lastSequence(ofStream:)``
+- ``Database/streamOffset(_:consumer:)``
+- ``Transaction/setStreamOffset(_:stream:consumer:)``
+- ``Transaction/trimStream(_:through:)``
+- ``StreamRecord``
+
 ### Command Line
 
 - <doc:CommandLineTool>
@@ -144,6 +180,8 @@ New to graph databases? Start with <doc:GraphBasics>, then follow
 - ``CypherError``
 - ``TemporalValidityError``
 - ``TemporalQueryError``
+- ``VectorError``
+- ``StreamError``
 
 ### Native Runtime
 

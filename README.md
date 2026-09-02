@@ -190,6 +190,43 @@ swift run lattice index node create --database demo.db --label Person --property
 swift run lattice index edge create --database demo.db --type KNOWS --property since
 ```
 
+## Search And Streams
+
+Beyond the property graph, the package exposes three native subsystems. All
+three are ordinary database features with no dependency on any particular
+application; see the `Searching and Ranking` and `Durable Streams` articles in
+the DocC catalog.
+
+Full-text search is BM25-scored over an explicitly declared index. Searching a
+label and property with no index fails rather than returning nothing, so a
+mistyped property name cannot be mistaken for a genuine miss:
+
+```swift
+try database.createFullTextIndex(label: "Article", property: "body")
+let matches = try database.fullTextSearch("kiln", label: "Article", property: "body")
+```
+
+Vector search is off unless the database is opened with a stored width, which is
+then recorded in the file. `Embedding.hash` produces deterministic vectors with
+no external service; `EmbeddingClient` calls an OpenAI- or Ollama-shaped
+endpoint:
+
+```swift
+let database = try Database(path: path, configuration: .init(vectorDimensions: 768))
+try database.write { try $0.setVector(embedding, forKey: "embedding", onNode: article) }
+let neighbors = try database.vectorSearch(query, limit: 10)
+```
+
+Durable streams are an append-only log in the same file. A record published in a
+write transaction commits with the graph change that produced it, and consumers
+resume from an offset they commit alongside their own work:
+
+```swift
+try database.write { transaction in
+    try transaction.publish(.string(body), to: "articles.indexed", kind: "created")
+}
+let records = try database.readStream("articles.indexed", after: cursor, limit: 100)
+```
 ## Demo
 
 Create a small people, places, and events graph for experimentation:

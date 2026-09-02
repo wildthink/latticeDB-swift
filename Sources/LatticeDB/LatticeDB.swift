@@ -29,14 +29,25 @@ public struct DatabaseConfiguration: Sendable {
   /// Whether to prevent all writes through the opened database handle.
   public var readOnly = false
 
+  /// The width of vectors stored on nodes, or `nil` to disable vector storage.
+  ///
+  /// Vector storage is off by default because it costs index space whether or
+  /// not any vector is written. A database records the dimension it was
+  /// created with, so this must match on every later open.
+  public var vectorDimensions: UInt16?
+
   /// Creates database open options.
   ///
   /// - Parameters:
   ///   - createIfMissing: Whether a missing database path is created.
   ///   - readOnly: Whether the resulting handle prohibits writes.
-  public init(createIfMissing: Bool = true, readOnly: Bool = false) {
+  ///   - vectorDimensions: The vector width to enable, from 1 through 4096.
+  public init(
+    createIfMissing: Bool = true, readOnly: Bool = false, vectorDimensions: UInt16? = nil
+  ) {
     self.createIfMissing = createIfMissing
     self.readOnly = readOnly
+    self.vectorDimensions = vectorDimensions
   }
 }
 
@@ -63,8 +74,11 @@ public final class Database {
   ///   - configuration: Options controlling creation and write access.
   public init(path: String, configuration: DatabaseConfiguration = .init()) throws {
     var result: OpaquePointer?
+    let dimensions = configuration.vectorDimensions
     let code = path.withCString {
-      lattice_bridge_open($0, configuration.createIfMissing, configuration.readOnly, &result)
+      lattice_bridge_open(
+        $0, configuration.createIfMissing, configuration.readOnly, dimensions != nil,
+        dimensions ?? 0, &result)
     }
     try check(code)
     handle = result

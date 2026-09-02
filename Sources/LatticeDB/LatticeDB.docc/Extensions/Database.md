@@ -46,3 +46,23 @@ own transactions internally.
 - ``dropNodeIndex(label:property:)``
 - ``createEdgeIndex(type:property:)``
 - ``dropEdgeIndex(type:property:)``
+
+### Full-Text Search
+
+- ``createFullTextIndex(label:property:)``
+- ``dropFullTextIndex(label:property:)``
+- ``fullTextIndexExists(label:property:)``
+- ``createFullTextIndex(edgeType:property:)``
+- ``dropFullTextIndex(edgeType:property:)``
+- ``fullTextIndexExists(edgeType:property:)``
+- ``fullTextSearch(_:label:property:limit:fuzzy:)``
+
+### Vector Search
+
+- ``vectorSearch(_:limit:efSearch:)``
+
+### Durable Streams
+
+- ``readStream(_:after:limit:timeout:)``
+- ``lastSequence(ofStream:)``
+- ``streamOffset(_:consumer:)``
