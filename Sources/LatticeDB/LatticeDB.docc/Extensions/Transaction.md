@@ -76,6 +76,18 @@ modeled ``NodeType``, ``EdgeType``, and ``PropertyKey`` values described in
 - ``setTemporalValidity(_:onNode:fromKey:toKey:)``
 - ``setTemporalValidity(_:onEdge:fromKey:toKey:)``
 
+### Searching
+
+- ``fullTextSearch(_:label:property:limit:fuzzy:)``
+- ``setVector(_:forKey:onNode:)``
+- ``vectorSearch(_:limit:efSearch:)``
+
+### Durable Streams
+
+- ``publish(_:to:kind:)``
+- ``setStreamOffset(_:stream:consumer:)``
+- ``trimStream(_:through:)``
+
 ### Ending a Transaction
 
 - ``commit()``

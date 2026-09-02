@@ -11,7 +11,7 @@ UNAME_S := $(shell uname -s)
 ZIG_TARGET_ARGS := $(if $(LATTICE_ZIG_TARGET),-Dtarget=$(LATTICE_ZIG_TARGET),)
 
 .DEFAULT_GOAL := help
-.PHONY: help resolve native verify-native sync-native-header check-upstream update-native native-apple native-linux linux-build linux-test build test run docs docs-preview clean
+.PHONY: help resolve native verify-native sync-native-header check-upstream update-native native-apple native-linux linux-build linux-test build test run docs docs-memory docs-preview clean
 
 ifeq ($(UNAME_S),Darwin)
 NATIVE_TARGET := native-apple
@@ -110,6 +110,17 @@ docs: native
 		generate-documentation --target LatticeDB \
 		--warnings-as-errors \
 		--output-path "$(DOCS_OUTPUT)")
+
+# LatticeMemory documents separately: the DocC plugin builds one archive per
+# target, and a cross-target symbol link would not resolve in either of them.
+DOCS_MEMORY_OUTPUT ?= $(CURDIR)/.build/documentation-memory
+
+docs-memory: native
+	$(call with_docs_resolved,swift package \
+		--allow-writing-to-directory "$(DOCS_MEMORY_OUTPUT)" \
+		generate-documentation --target LatticeMemory \
+		--warnings-as-errors \
+		--output-path "$(DOCS_MEMORY_OUTPUT)")
 
 docs-preview: native
 	$(call with_docs_resolved,swift package --disable-sandbox \

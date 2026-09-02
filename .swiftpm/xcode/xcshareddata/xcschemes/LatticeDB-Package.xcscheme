@@ -33,6 +33,19 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "LatticeMemory"
+               BuildableName = "LatticeMemory"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -48,6 +61,15 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "LatticeDBTests"
                BuildableName = "LatticeDBTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "LatticeMemoryTests"
+               BuildableName = "LatticeMemoryTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>

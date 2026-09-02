@@ -190,6 +190,159 @@ swift run lattice index node create --database demo.db --label Person --property
 swift run lattice index edge create --database demo.db --type KNOWS --property since
 ```
 
+## Search And Streams
+
+Beyond the property graph, the package exposes three native subsystems. All
+three are ordinary database features with no dependency on any particular
+application; see the `Searching and Ranking` and `Durable Streams` articles in
+the DocC catalog.
+
+Full-text search is BM25-scored over an explicitly declared index. Searching a
+label and property with no index fails rather than returning nothing, so a
+mistyped property name cannot be mistaken for a genuine miss:
+
+```swift
+try database.createFullTextIndex(label: "Article", property: "body")
+let matches = try database.fullTextSearch("kiln", label: "Article", property: "body")
+```
+
+Vector search is off unless the database is opened with a stored width, which is
+then recorded in the file. `Embedding.hash` produces deterministic vectors with
+no external service; `EmbeddingClient` calls an OpenAI- or Ollama-shaped
+endpoint:
+
+```swift
+let database = try Database(path: path, configuration: .init(vectorDimensions: 768))
+try database.write { try $0.setVector(embedding, forKey: "embedding", onNode: article) }
+let neighbors = try database.vectorSearch(query, limit: 10)
+```
+
+Durable streams are an append-only log in the same file. A record published in a
+write transaction commits with the graph change that produced it, and consumers
+resume from an offset they commit alongside their own work:
+
+```swift
+try database.write { transaction in
+    try transaction.publish(.string(body), to: "articles.indexed", kind: "created")
+}
+let records = try database.readStream("articles.indexed", after: cursor, limit: 100)
+```
+
+## Evidence And Assertions
+
+The `LatticeMemory` library is a second product in this package. It stores raw
+**evidence** that is never rewritten, and **assertions** derived from it that
+carry a link back to the evidence — and, where a rule asks for one, the verbatim
+quote they were read from.
+
+Nothing in it is specific to any one domain. A slot is a name you choose, a scope
+dimension is a name you choose, and the built-in extractor is regular
+expressions over text, so the same store suits a configuration history, a
+document-extraction pipeline, or a device's derived state.
+
+```swift
+import LatticeMemory
+
+let store = try MemoryStore(
+    path: "memory.db",
+    schema: ["package.manager": SlotRule(allowedValues: ["npm", "pnpm", "yarn"])],
+    extractors: [
+        PatternExtractor([.init(slot: "package.manager", pattern: #/using (npm|pnpm|yarn)/#)])
+    ]
+)
+
+try store.record(EvidenceDraft(text: "We are using pnpm.", scope: ["project": "acme"]))
+let current = try store.currentAssertions(in: ["project": "acme"])
+let lastMarch = try store.assertions(validAt: date, in: ["project": "acme"])
+```
+
+Three rules do most of the work. Values are **superseded, not overwritten**, so
+`assertions(validAt:in:)` answers what was held to be true at any past moment.
+**Scope is checked on every read**: a record is visible only when every dimension
+it declares appears in the querying scope with the same value. And **extractors
+propose while the store decides** — an extractor has no write access, so one that
+names an undeclared slot, invents a quote, or reaches outside its evidence's
+scope has its proposal refused and reported rather than stored.
+
+`retrieve` returns a bounded, scoped, ranked set of records — and an account of
+everything it left out, so a result that is smaller than expected explains
+itself rather than looking like an empty store:
+
+```swift
+let result = try store.retrieve(
+    RetrievalRequest(
+        query: "which package manager",
+        scope: ["project": "acme"],
+        budget: .characters(2_000)
+    )
+)
+
+result.items                       // the ranking
+result.sections                    // grouped for assembly into a document
+result.trace.candidates            // what ranking produced, before filtering
+result.trace.dropped[.outOfScope]  // how many the scope excluded
+```
+
+Ranking is lexical by default, and hybrid — BM25 and vectors fused by reciprocal
+rank — when the store is given a `TextEmbedder`. `HashEmbedder` needs no network
+and is deterministic; `RemoteEmbedder` wraps an HTTP embedding service. A
+`Budget` counts characters, items, or whatever you supply a measure for.
+
+`forget` removes a record and everything concluded from it. An assertion that
+loses all of its supporting evidence is retracted and redacted — including the
+quote, which is a verbatim copy of the text being forgotten; one that keeps some
+support stands without the forgotten citations. Preview the closure first, since
+it reaches further than the selection:
+
+```swift
+let preview = try store.forgetPreview(.matching(scope: ["user": "sam"]))
+preview.retractedAssertions   // lost all support
+preview.weakenedAssertions    // lost some, survived on the rest
+
+try store.forget(.identifiers([record.id]))               // tombstone: identity survives
+try store.forget(.identifiers([record.id], mode: .erase)) // erase: nothing survives
+```
+
+A `Consolidator` folds many records into one conclusion citing all of them, so
+forgetting any input weakens it and forgetting all of them retracts it — the
+provenance machinery needs no special case for summaries. `DigestConsolidator`
+concatenates deterministically; a real summarizer plugs into the same contract.
+A `PinnedNote` is authored rather than derived and is always retrieved within its
+scope, getting first claim on the budget:
+
+```swift
+try store.consolidate(
+    .matching(kinds: ["log"], occurredIn: lastWeek),
+    using: DigestConsolidator(slot: "week.digest")
+)
+
+try store.pin("Readings are uncalibrated below 5°C.", title: "caveat",
+              scope: ["device": "sensor-4"])
+```
+
+Slow or fallible work belongs after a write, not inside it. Setting an event
+stream makes each change publish to a durable stream in the same transaction;
+`materialize` turns those records into leased `Job` nodes keyed by
+`{stream, sequence, worker}`, so it is safe to run on a timer and work survives
+the process that triggered it:
+
+```swift
+store.eventStream = "memory.events"
+try store.record(EvidenceDraft(text: "…"))   // publishes an event
+
+try store.materialize(stream: "memory.events", worker: "embedder")
+try store.run(worker: "embedder", count: 10) { job in
+    guard case .string(let id) = job.payload else { return }
+    try backfillEmbedding(for: RecordID(id))
+}
+```
+
+A lease is a deadline rather than a lock, so a crashed worker does not strand
+work — and handlers must therefore tolerate running twice.
+
+Build its documentation with `make docs-memory`; the articles live in
+`Sources/LatticeMemory/LatticeMemory.docc`.
+
 ## Demo
 
 Create a small people, places, and events graph for experimentation:
