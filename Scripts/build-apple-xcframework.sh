@@ -11,6 +11,11 @@ build_slice() {
   local arch="$1"
   local prefix="$work_dir/$arch"
   (cd "$source_dir" && zig build -Doptimize=ReleaseFast -Dtarget="${arch}-macos" --prefix "$prefix")
+  # zig pads the archive symbol table to 4 bytes, so whether the object member
+  # lands on the 8-byte boundary lipo and ld require is down to the symbol
+  # count. When it does not, lipo reads the archive as empty instead of
+  # failing, so rewrite the archive with ranlib to guarantee the alignment.
+  ranlib "$prefix/lib/liblattice.a"
 }
 
 arm_prefix="$work_dir/aarch64"

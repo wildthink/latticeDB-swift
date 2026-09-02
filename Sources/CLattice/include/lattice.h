@@ -19,9 +19,9 @@ extern "C" {
 #endif
 
 /* Version information */
-#define LATTICE_VERSION "0.12.0"
+#define LATTICE_VERSION "0.15.0"
 #define LATTICE_VERSION_MAJOR 0
-#define LATTICE_VERSION_MINOR 12
+#define LATTICE_VERSION_MINOR 15
 #define LATTICE_VERSION_PATCH 0
 
 /* Opaque handle types */
@@ -55,7 +55,10 @@ typedef enum {
     LATTICE_ERROR_CHECKSUM = -12,
     LATTICE_ERROR_OUT_OF_MEMORY = -13,
     LATTICE_ERROR_UNSUPPORTED = -14,
-    LATTICE_ERROR_VALUE_TOO_LARGE = -15
+    LATTICE_ERROR_VALUE_TOO_LARGE = -15,
+    /* Another process holds the database. Distinct from LATTICE_ERROR_LOCK_TIMEOUT,
+     * which reports a second writer inside this process. */
+    LATTICE_ERROR_DATABASE_LOCKED = -16
 } lattice_error;
 
 /* Transaction modes */
@@ -170,6 +173,28 @@ typedef struct {
 /* Default open options v3 */
 #define LATTICE_OPEN_OPTIONS_V3_DEFAULT { sizeof(lattice_open_options_v3), false, false, 100, 4096, false, 128, true, false }
 
+/* Open options v4 */
+typedef struct {
+    size_t struct_size;     /* Must be sizeof(lattice_open_options_v4) */
+    bool create;            /* Create if not exists */
+    bool read_only;         /* Open in read-only mode */
+    uint32_t cache_size_mb; /* Cache size in MB (default: 100) */
+    uint32_t page_size;     /* Page size in bytes (default: 4096) */
+    bool enable_vector;     /* Enable vector storage for embeddings */
+    uint16_t vector_dimensions; /* Vector dimensions, 1..4096 (default: 128) */
+    bool enable_wal;        /* Enable WAL-backed transactions (default: true) */
+    bool enable_adjacency_cache; /* Enable in-memory graph adjacency cache */
+    /* Take a lock on the file so two processes cannot tread on each other
+     * (default: true). A read-write handle takes the file exclusively and a
+     * read-only handle shares it, so opening returns LATTICE_ERROR_DATABASE_LOCKED
+     * rather than waiting. Turn this off only where locking does not work, such
+     * as some network filesystems; it does not make concurrent access safe. */
+    bool lock;
+} lattice_open_options_v4;
+
+/* Default open options v4 */
+#define LATTICE_OPEN_OPTIONS_V4_DEFAULT { sizeof(lattice_open_options_v4), false, false, 100, 4096, false, 128, true, false, true }
+
 /*
  * Database operations
  */
@@ -192,6 +217,16 @@ lattice_error lattice_open_v2(
 lattice_error lattice_open_v3(
     const char* path,
     const lattice_open_options_v3* options,
+    lattice_database** db_out
+);
+
+/* Open a database file with v4 options.
+ * Returns LATTICE_ERROR_DATABASE_LOCKED if another process holds the database in
+ * a conflicting way: a read-write handle takes the file exclusively, so a reader
+ * is refused while a writer has it open. */
+lattice_error lattice_open_v4(
+    const char* path,
+    const lattice_open_options_v4* options,
     lattice_database** db_out
 );
 
@@ -337,6 +372,58 @@ lattice_error lattice_node_property_index_drop(
     const char* property
 );
 
+/* Create or drop a full-text index over one node label/property pair.
+ *
+ * The property holds the text. Creation reads it from every node already
+ * carrying the label, and writes maintain it from then on. Only string
+ * properties are indexed.
+ *
+ * `d.property @@ "query"` searches the index declared for that label and
+ * property, and fails when none is declared rather than returning no rows,
+ * because no rows is indistinguishable from a search that found nothing.
+ *
+ * These schema operations fail with LATTICE_ERROR_LOCK_TIMEOUT while a write
+ * transaction is active. */
+lattice_error lattice_node_fts_index_create(
+    lattice_database* db,
+    const char* label,
+    const char* property
+);
+
+lattice_error lattice_node_fts_index_drop(
+    lattice_database* db,
+    const char* label,
+    const char* property
+);
+
+lattice_error lattice_node_fts_index_exists(
+    lattice_database* db,
+    const char* label,
+    const char* property,
+    bool* exists_out
+);
+
+/* The same over a relationship type and property. A Cypher
+ * `-[x:TYPE]->` pattern with `x.property @@ "query"` searches this index. */
+lattice_error lattice_edge_fts_index_create(
+    lattice_database* db,
+    const char* edge_type,
+    const char* property
+);
+
+lattice_error lattice_edge_fts_index_drop(
+    lattice_database* db,
+    const char* edge_type,
+    const char* property
+);
+
+lattice_error lattice_edge_fts_index_exists(
+    lattice_database* db,
+    const char* edge_type,
+    const char* property,
+    bool* exists_out
+);
+
 /* Find visible node IDs through an explicit label/property equality index.
  * Returns LATTICE_ERROR_UNSUPPORTED if the requested index does not exist.
  * The caller owns *node_ids_out and must use lattice_free_node_ids(). */
@@ -355,6 +442,66 @@ void lattice_free_node_ids(lattice_node_id* node_ids, size_t count);
 
 /* Free a string allocated by lattice (e.g., from lattice_node_get_labels) */
 void lattice_free_string(char* str);
+
+/*
+ * Serialization
+ *
+ * A database is a single file, so serializing one is handing back that file's
+ * bytes. Write them anywhere and they open; pass them to lattice_deserialize and
+ * they open without becoming a file you have to name.
+ *
+ * This is the piece that makes a database easy to keep in object storage. Your
+ * application does its own uploading and downloading, with the client,
+ * credentials, and retry policy it already has.
+ */
+
+/* Hand back the whole database as bytes.
+ * Pending writes are folded in first, so the result needs no write-ahead log
+ * beside it. Returns LATTICE_ERROR_LOCK_TIMEOUT if a transaction is open, because
+ * bytes captured while writes land underneath them are torn.
+ * The caller owns *bytes_out and must release it with lattice_free_bytes(). */
+lattice_error lattice_serialize(
+    lattice_database* db,
+    uint8_t** bytes_out,
+    size_t* len_out
+);
+
+/* Open a database from bytes produced by lattice_serialize.
+ * The bytes are copied, so the caller may free them as soon as this returns.
+ * Changes made afterwards do not travel back to them; call lattice_serialize
+ * again to get the new bytes.
+ * Returns LATTICE_ERROR_CORRUPTION if the bytes are not a database. */
+lattice_error lattice_deserialize(
+    const uint8_t* bytes,
+    size_t len,
+    const lattice_open_options_v4* options,
+    lattice_database** db_out
+);
+
+/* Open a database from bytes without copying them.
+ *
+ * Saves holding the database twice while it loads. Each page becomes a copy of
+ * its own the first time it is written, so reading a database and changing a
+ * little of it keeps one copy of nearly all of it.
+ *
+ * THE BYTES MUST OUTLIVE THE DATABASE. Nothing is copied, so releasing them
+ * while the database is open leaves it reading freed memory. This is a separate
+ * function rather than a flag because that obligation deserves to be visible at
+ * the call site.
+ *
+ * Not every language can promise this. Go may not let C retain a pointer into
+ * its heap at all, and pinning a Java array for the life of a database would
+ * hold up the collector for just as long; those callers want
+ * lattice_deserialize instead. */
+lattice_error lattice_deserialize_borrowed(
+    const uint8_t* bytes,
+    size_t len,
+    const lattice_open_options_v4* options,
+    lattice_database** db_out
+);
+
+/* Release a buffer returned by lattice_serialize. */
+void lattice_free_bytes(uint8_t* bytes, size_t len);
 
 /* Free heap-backed storage inside a lattice_value returned by an owning API.
  * LIST/MAP values are released recursively.
@@ -548,21 +695,21 @@ void lattice_vector_result_free(lattice_vector_result* result);
 /*
  * Full-text search operations
  *
- * BM25-scored full-text search:
- *   1. Index documents with lattice_fts_index()
- *   2. Search with lattice_fts_search()
- *   3. Get result count with lattice_fts_result_count()
- *   4. Iterate results with lattice_fts_result_get()
- *   5. Free with lattice_fts_result_free()
+ * BM25-scored full-text search over a declared index:
+ *   1. Declare an index over the property holding the text, with
+ *      lattice_node_fts_index_create()
+ *   2. Write that property; the index is maintained from then on
+ *   3. Search with lattice_fts_search()
+ *   4. Get result count with lattice_fts_result_count()
+ *   5. Iterate results with lattice_fts_result_get()
+ *   6. Free with lattice_fts_result_free()
  *
  * Example:
- *   // Index a document
- *   const char* text = "The quick brown fox jumps over the lazy dog";
- *   lattice_fts_index(txn, node_id, text, strlen(text));
+ *   lattice_node_fts_index_create(db, "Article", "text");
+ *   // ... write Article.text on some nodes ...
  *
- *   // Search
  *   lattice_fts_result* results;
- *   lattice_fts_search(db, "quick fox", 9, 10, &results);
+ *   lattice_fts_search(db, "Article", "text", "quick fox", 9, 10, &results);
  *   uint32_t count = lattice_fts_result_count(results);
  *   for (uint32_t i = 0; i < count; i++) {
  *       lattice_node_id node_id;
@@ -570,19 +717,23 @@ void lattice_vector_result_free(lattice_vector_result* result);
  *       lattice_fts_result_get(results, i, &node_id, &score);
  *   }
  *   lattice_fts_result_free(results);
+ *
+ * lattice_fts_index() is gone. It put text into a single index shared by every
+ * node, which meant the text a search matched was not stored anywhere the
+ * database could show you, and every property name searched the same text.
+ * Text that was indexed that way and never written to a property cannot be
+ * migrated automatically: store it in a property and declare an index over it.
+ *
+ * Searching a label and property with no declared index returns
+ * LATTICE_ERROR_UNSUPPORTED rather than an empty result, so a mistyped property
+ * name does not look like a query that found nothing.
  */
 
-/* Index a text document for full-text search */
-lattice_error lattice_fts_index(
-    lattice_txn* txn,
-    lattice_node_id node_id,
-    const char* text,
-    size_t text_len
-);
-
-/* Search for documents matching a text query */
+/* Search one declared index for documents matching a text query */
 lattice_error lattice_fts_search(
     lattice_database* db,
+    const char* label,
+    const char* property,
     const char* query,
     size_t query_len,
     uint32_t limit,
@@ -591,6 +742,8 @@ lattice_error lattice_fts_search(
 
 lattice_error lattice_fts_search_txn(
     lattice_txn* txn,
+    const char* label,
+    const char* property,
     const char* query,
     size_t query_len,
     uint32_t limit,
@@ -599,9 +752,15 @@ lattice_error lattice_fts_search_txn(
 
 /* Search with fuzzy matching (typo tolerance).
  * max_distance: max Levenshtein edit distance (0 = default 2)
- * min_term_length: min term length for fuzzy expansion (0 = default 4) */
+ * min_term_length: min term length for fuzzy expansion (0 = default 4)
+ *
+ * Text written in the current transaction and not yet committed is matched by
+ * term presence rather than edit distance, so a typo will not find a document
+ * this transaction has only just written. */
 lattice_error lattice_fts_search_fuzzy(
     lattice_database* db,
+    const char* label,
+    const char* property,
     const char* query,
     size_t query_len,
     uint32_t limit,
@@ -612,6 +771,8 @@ lattice_error lattice_fts_search_fuzzy(
 
 lattice_error lattice_fts_search_fuzzy_txn(
     lattice_txn* txn,
+    const char* label,
+    const char* property,
     const char* query,
     size_t query_len,
     uint32_t limit,
