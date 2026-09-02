@@ -149,6 +149,10 @@ public final class MemoryStore {
   }
 
   /// Returns the evidence supporting `assertion`, in the order it was cited.
+  ///
+  /// Forgotten evidence appears here as a tombstone — identifier and timestamps
+  /// intact, text empty, ``Evidence/isForgotten`` set. Hiding it would make a
+  /// redacted citation indistinguishable from one that never existed.
   public func evidence(supporting assertion: RecordID) throws -> [Evidence] {
     try database.read { transaction in
       guard let node = try locate(assertion, label: Labels.assertion, in: transaction) else {
@@ -201,6 +205,48 @@ public final class MemoryStore {
     }
   }
 
+  // MARK: - Selecting evidence
+
+  /// Finds the evidence matching a set of filters, newest constraint first.
+  ///
+  /// Shared by ``forget(_:)`` and ``consolidate(_:using:)``: both act on a body
+  /// of records chosen the same way, and a selector that behaved differently
+  /// between them would make a preview meaningless.
+  ///
+  /// Scope matches the stored scope **exactly** rather than by visibility. Both
+  /// callers change the store, and a broad context must not reach records that
+  /// merely happen to be visible from it.
+  ///
+  /// Forgotten records are never selected. A tombstone has nothing left to act
+  /// on, and counting one again would double-report a closure.
+  func selectEvidence(
+    identifiers: [RecordID], query: String?, scope: Scope?, kinds: Set<String>?,
+    occurredIn: Range<Date>?, limit: Int, in transaction: Transaction
+  ) throws -> (evidence: [Evidence], wasTruncated: Bool) {
+    var nodes: [NodeID] = []
+    if !identifiers.isEmpty {
+      nodes = try identifiers.compactMap { try locate($0, label: Labels.evidence, in: transaction) }
+    } else if let query {
+      nodes = try transaction.fullTextSearch(
+        query, label: Labels.evidence, property: Keys.text, limit: limit + 1
+      ).map(\.node)
+    } else {
+      nodes = try transaction.nodeIDs(label: Labels.evidence)
+    }
+
+    var selected: [Evidence] = []
+    for node in nodes {
+      let evidence = try readEvidence(node, in: transaction)
+      if evidence.isForgotten { continue }
+      if let scope, evidence.scope != scope { continue }
+      if let kinds, !kinds.contains(evidence.kind) { continue }
+      if let occurredIn, !occurredIn.contains(evidence.occurredAt) { continue }
+      selected.append(evidence)
+      if selected.count > limit { return (Array(selected.prefix(limit)), true) }
+    }
+    return (selected, false)
+  }
+
   // MARK: - Storage layout
 
   enum Labels {
@@ -224,6 +270,8 @@ public final class MemoryStore {
     static let recordedAt = "recordedAt"
     static let metadataKeys = "metadataKeys"
     static let metadataPrefix = "meta_"
+    static let forgotten = "forgotten"
+    static let forgottenAt = "forgottenAt"
     static let slot = "slot"
     static let value = "value"
     static let state = "state"
@@ -250,6 +298,10 @@ public final class MemoryStore {
     for key in keys.split(separator: "\u{1F}").map(String.init) {
       metadata[key] = try transaction.propertyValue(Keys.metadataPrefix + key, ofNode: node)
     }
+    var isForgotten = false
+    if case .bool(let flag) = try transaction.propertyValue(Keys.forgotten, ofNode: node) {
+      isForgotten = flag
+    }
     return Evidence(
       id: id,
       kind: try string(Keys.kind, node, in: transaction, fallback: ""),
@@ -257,7 +309,8 @@ public final class MemoryStore {
       scope: Scope(storageKey: try string(Keys.scope, node, in: transaction, fallback: "")),
       occurredAt: try date(Keys.occurredAt, node, in: transaction, id: id),
       recordedAt: try date(Keys.recordedAt, node, in: transaction, id: id),
-      metadata: metadata)
+      metadata: metadata,
+      isForgotten: isForgotten)
   }
 
   func readAssertion(_ node: NodeID, in transaction: Transaction) throws -> Assertion {

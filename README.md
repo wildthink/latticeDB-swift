@@ -285,6 +285,20 @@ Ranking is lexical by default, and hybrid — BM25 and vectors fused by reciproc
 rank — when the store is given a `TextEmbedder`. `HashEmbedder` needs no network
 and is deterministic; `RemoteEmbedder` wraps an HTTP embedding service. A
 `Budget` counts characters, items, or whatever you supply a measure for.
+`forget` removes a record and everything concluded from it. An assertion that
+loses all of its supporting evidence is retracted and redacted — including the
+quote, which is a verbatim copy of the text being forgotten; one that keeps some
+support stands without the forgotten citations. Preview the closure first, since
+it reaches further than the selection:
+
+```swift
+let preview = try store.forgetPreview(.matching(scope: ["user": "sam"]))
+preview.retractedAssertions   // lost all support
+preview.weakenedAssertions    // lost some, survived on the rest
+
+try store.forget(.identifiers([record.id]))               // tombstone: identity survives
+try store.forget(.identifiers([record.id], mode: .erase)) // erase: nothing survives
+```
 Build its documentation with `make docs-memory`; the articles live in
 `Sources/LatticeMemory/LatticeMemory.docc`.
 ## Demo

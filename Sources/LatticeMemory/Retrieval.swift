@@ -175,6 +175,8 @@ public enum DropReason: String, Sendable, CaseIterable {
   case notRequested
   /// A returned assertion already cites this evidence.
   case citedByAssertion
+  /// The record was forgotten.
+  case forgotten
   /// The budget filled before reaching it.
   case overBudget
 }
@@ -243,7 +245,7 @@ extension MemoryStore {
   /// 3. Drop assertions that did not hold at ``RetrievalRequest/validAt``, and
   ///    evidence outside ``RetrievalRequest/occurredIn``.
   /// 4. Drop kinds, slots, categories, and evidence kinds that were not asked
-  ///    for.
+  ///    for, and any evidence that has been forgotten.
   /// 5. Drop evidence that a surviving assertion already cites, unless
   ///    ``RetrievalRequest/suppressesCitedEvidence`` is off.
   /// 6. Fill the ``Budget`` in rank order and drop the rest.
@@ -291,6 +293,10 @@ extension MemoryStore {
       case .evidence(let evidence):
         guard request.kinds.contains(.evidence) else {
           drop(.notRequested)
+          continue
+        }
+        guard !evidence.isForgotten else {
+          drop(.forgotten)
           continue
         }
         guard evidence.scope.isVisible(in: request.scope) else {

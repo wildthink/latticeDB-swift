@@ -35,9 +35,17 @@ public struct Evidence: Sendable, Equatable, Identifiable {
   /// Caller-supplied fields, stored alongside and returned unchanged.
   public var metadata: [String: Value]
 
+  /// Whether this record has been forgotten.
+  ///
+  /// A tombstone keeps its identifier, kind, and timestamps and loses its text
+  /// and metadata, so a reference to it resolves to "this was forgotten" rather
+  /// than to nothing at all. Retrieval never returns one. See
+  /// ``MemoryStore/forget(_:)``.
+  public var isForgotten: Bool
+
   public init(
     id: RecordID, kind: String, text: String, scope: Scope, occurredAt: Date, recordedAt: Date,
-    metadata: [String: Value] = [:]
+    metadata: [String: Value] = [:], isForgotten: Bool = false
   ) {
     self.id = id
     self.kind = kind
@@ -46,6 +54,7 @@ public struct Evidence: Sendable, Equatable, Identifiable {
     self.occurredAt = occurredAt
     self.recordedAt = recordedAt
     self.metadata = metadata
+    self.isForgotten = isForgotten
   }
 }
 
@@ -96,7 +105,8 @@ public enum AssertionState: String, Sendable, Codable {
   /// interval between its ``Assertion/validFrom`` and ``Assertion/validTo``.
   case superseded
 
-  /// Withdrawn without a replacement, because a caller retracted it directly.
+  /// Withdrawn without a replacement, because a caller retracted it directly or
+  /// because every piece of evidence behind it was forgotten.
   case retracted
 }
 

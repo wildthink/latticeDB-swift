@@ -28,6 +28,8 @@ Three rules do most of the work:
 - **Retrieval explains itself.** ``MemoryStore/retrieve(_:)`` returns a bounded,
   scoped, ranked set of records and a ``RetrievalTrace`` accounting for every
   candidate it discarded.
+- **Forgetting propagates.** ``MemoryStore/forget(_:)`` removes a record and
+  every conclusion that rested on it, including the quotes copied out of it.
 
 Nothing here is specific to any one domain. A slot is a name you choose; a scope
 dimension is a name you choose; ``PatternExtractor`` is regular expressions over
@@ -55,6 +57,7 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 
 - <doc:EvidenceAndAssertions>
 - <doc:Retrieval>
+- <doc:Forgetting>
 - ``MemoryStore``
 - ``Scope``
 - ``RecordID``
@@ -92,6 +95,17 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 - ``SearchMode``
 - ``RecordKinds``
 - ``Budget``
+
+### Forgetting
+
+- <doc:Forgetting>
+- ``MemoryStore/forget(_:)``
+- ``MemoryStore/forgetPreview(_:)``
+- ``ForgetRequest``
+- ``ForgetMode``
+- ``ForgetReport``
+- ``WeakenedAssertion``
+- ``ForgetError``
 
 ### Explaining a Result
 
