@@ -255,7 +255,7 @@ public final class Transaction {
 /// Metadata for the LatticeDB native engine bundled by this package.
 public enum LatticeDB {
   /// The pinned native LatticeDB semantic version.
-  public static let nativeVersion = "0.12.0"
+  public static let nativeVersion = "0.15.0"
 }
 
 func check(_ code: Int32) throws {
