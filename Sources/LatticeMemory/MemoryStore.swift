@@ -108,6 +108,7 @@ public final class MemoryStore {
     try database.createNodeIndex(label: Labels.job, property: Keys.jobKey)
     try database.createNodeIndex(label: Labels.job, property: Keys.worker)
     try database.createNodeIndex(label: Labels.alias, property: Keys.alias)
+    try database.createNodeIndex(label: Labels.facet, property: Keys.facetID)
   }
 
   /// Publishes one of the store's own events, when an event stream is set.
@@ -285,6 +286,7 @@ public final class MemoryStore {
     static let note = "Note"
     static let job = "Job"
     static let alias = "Alias"
+    static let facet = "Facet"
   }
 
   enum Edges {
@@ -292,6 +294,8 @@ public final class MemoryStore {
     static let evidencedBy = "EVIDENCED_BY"
     /// From a new assertion to the one it replaced.
     static let supersedes = "SUPERSEDES"
+    /// From a record to a facet it is about.
+    static let mentions = "MENTIONS"
   }
 
   enum Keys {
@@ -318,6 +322,8 @@ public final class MemoryStore {
     static let namespace = "namespace"
     static let alias = "alias"
     static let canonical = "canonical"
+    static let facetKind = "facetKind"
+    static let facetID = "facetID"
     static let jobKey = "jobKey"
     static let stream = "stream"
     static let sequence = "sequence"
@@ -357,6 +363,7 @@ public final class MemoryStore {
       occurredAt: try date(Keys.occurredAt, node, in: transaction, id: id),
       recordedAt: try date(Keys.recordedAt, node, in: transaction, id: id),
       metadata: metadata,
+      facets: try facets(ofNode: node, in: transaction),
       isForgotten: isForgotten)
   }
 
@@ -391,10 +398,11 @@ public final class MemoryStore {
       evidence: evidence,
       quote: { if case .string(let text) = quote { return text } else { return nil } }(),
       confidence: confidence,
-      category: { if case .string(let text) = category { return text } else { return nil } }())
+      category: { if case .string(let text) = category { return text } else { return nil } }(),
+      facets: try facets(ofNode: node, in: transaction))
   }
 
-  private func string(
+  func string(
     _ key: String, _ node: NodeID, in transaction: Transaction, fallback: String
   ) throws -> String {
     guard case .string(let value) = try transaction.propertyValue(key, ofNode: node) else {

@@ -307,6 +307,7 @@ extension MemoryStore {
     try transaction.setProperty(Keys.metadataKeys, onNode: node, to: .string(""))
     try transaction.setProperty(Keys.forgotten, onNode: node, to: .bool(true))
     try transaction.setProperty(Keys.forgottenAt, onNode: node, to: now.latticeValue)
+    try detachFacets(from: node, in: transaction)
     try clearVector(node, in: transaction)
   }
 
@@ -314,6 +315,7 @@ extension MemoryStore {
     try transaction.setProperty(Keys.text, onNode: node, to: .string(""))
     try transaction.setProperty(Keys.quote, onNode: node, to: .null)
     try transaction.setProperty(Keys.value, onNode: node, to: .null)
+    try detachFacets(from: node, in: transaction)
     try clearVector(node, in: transaction)
   }
 
