@@ -58,7 +58,8 @@ extension MemoryStore {
       scope: draft.scope,
       occurredAt: draft.occurredAt ?? now,
       recordedAt: now,
-      metadata: draft.metadata)
+      metadata: draft.metadata,
+      facets: draft.facets)
 
     var proposals: [AssertionProposal] = []
     var rejected: [Rejection] = []
@@ -309,9 +310,12 @@ extension MemoryStore {
       evidence: evidence.map(\.id),
       quote: checked.proposal.quote,
       confidence: checked.proposal.confidence,
-      category: checked.rule.category)
+      category: checked.rule.category,
+      // A conclusion is about whatever its sources were about.
+      facets: evidence.reduce(into: Set<Facet>()) { $0.formUnion($1.facets) })
 
     let node = try write(assertion, vectors: vectors, in: transaction)
+    try attach(assertion.facets, to: node, in: transaction)
     for evidenceNode in evidenceNodes {
       _ = try transaction.createEdge(from: node, to: evidenceNode, type: Edges.evidencedBy)
     }
@@ -402,6 +406,7 @@ extension MemoryStore {
         Keys.metadataPrefix + key, onNode: node, to: evidence.metadata[key] ?? .null)
     }
     try setVector(evidence.text, from: vectors, onNode: node, in: transaction)
+    try attach(evidence.facets, to: node, in: transaction)
     return node
   }
 

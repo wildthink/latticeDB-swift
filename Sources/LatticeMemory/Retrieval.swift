@@ -76,6 +76,23 @@ public struct RetrievalRequest: Sendable {
   /// A window on evidence's `occurredAt`, or `nil` for all of time.
   public var occurredIn: Range<Date>?
 
+  /// Facets to rank by, or none to ignore them.
+  ///
+  /// Facets rank; they do not filter. A record tagged with one of these is
+  /// pushed up the ranking, and a record tagged with none of them is still
+  /// returned when the query finds it. Use ``MemoryStore/records(mentioning:)``
+  /// when you want only what is tagged.
+  ///
+  /// This lane runs alongside whichever ``SearchMode`` is in force, so facets
+  /// and query text combine rather than competing. With facets and no query,
+  /// they rank on their own instead of falling back to recency. The one
+  /// exception is an explicit ``SearchMode/recency``, which asks for the newest
+  /// records and so ignores every relevance signal, facets included.
+  public var facets: Set<Facet>
+
+  /// How much each kind of facet counts against the others.
+  public var facetWeights: FacetWeights
+
   /// How candidates are found and ranked.
   public var mode: SearchMode
 
@@ -98,7 +115,8 @@ public struct RetrievalRequest: Sendable {
   public init(
     query: String? = nil, scope: Scope = .global, kinds: RecordKinds = .all,
     slots: Set<Slot>? = nil, categories: Set<String>? = nil, evidenceKinds: Set<String>? = nil,
-    validAt: Date? = nil, occurredIn: Range<Date>? = nil, mode: SearchMode = .automatic,
+    validAt: Date? = nil, occurredIn: Range<Date>? = nil, facets: Set<Facet> = [],
+    facetWeights: FacetWeights = .uniform, mode: SearchMode = .automatic,
     candidateLimit: Int = 200, budget: Budget = .unlimited, suppressesCitedEvidence: Bool = true
   ) {
     self.query = query
@@ -109,6 +127,8 @@ public struct RetrievalRequest: Sendable {
     self.evidenceKinds = evidenceKinds
     self.validAt = validAt
     self.occurredIn = occurredIn
+    self.facets = facets
+    self.facetWeights = facetWeights
     self.mode = mode
     self.candidateLimit = candidateLimit
     self.budget = budget
@@ -186,6 +206,9 @@ public enum RankingLane: String, Sendable, CaseIterable {
 
   /// Nearest neighbors of the query's embedding.
   case vector
+
+  /// Weighted overlap with the request's facets.
+  case facet
 }
 
 /// One lane's contribution to a fused score.
@@ -462,7 +485,9 @@ extension MemoryStore {
 
   private func resolve(_ mode: SearchMode, for request: RetrievalRequest) -> SearchMode {
     guard mode == .automatic else { return mode }
-    guard request.query != nil else { return .recency }
+    // Facets rank on their own, so a request carrying them is not query-less in
+    // the sense that forces recency.
+    guard request.query != nil else { return request.facets.isEmpty ? .recency : .lexical }
     return embedder == nil ? .lexical : .hybrid
   }
 
@@ -499,17 +524,27 @@ extension MemoryStore {
   }
 
   private func candidates(for request: RetrievalRequest, mode: SearchMode) throws -> [Candidate] {
-    guard let query = request.query, mode != .recency else {
-      return try recencyOrdered(limit: request.candidateLimit)
-    }
+    guard mode != .recency else { return try recencyOrdered(limit: request.candidateLimit) }
 
     var rankings: [(lane: RankingLane, addresses: [RecordAddress])] = []
-    if mode == .lexical || mode == .hybrid {
-      rankings.append((.lexical, try lexicalRanking(query, limit: request.candidateLimit)))
+    if let query = request.query {
+      if mode == .lexical || mode == .hybrid {
+        rankings.append((.lexical, try lexicalRanking(query, limit: request.candidateLimit)))
+      }
+      if mode == .vector || mode == .hybrid {
+        rankings.append((.vector, try vectorRanking(query, limit: request.candidateLimit)))
+      }
     }
-    if mode == .vector || mode == .hybrid {
-      rankings.append((.vector, try vectorRanking(query, limit: request.candidateLimit)))
+    if !request.facets.isEmpty {
+      rankings.append(
+        (
+          .facet,
+          try facetRanking(
+            request.facets, weights: request.facetWeights, limit: request.candidateLimit)
+        ))
     }
+    // Nothing to rank on means nothing was asked for, which is recency.
+    guard !rankings.isEmpty else { return try recencyOrdered(limit: request.candidateLimit) }
 
     let fused = reciprocalRankFusion(rankings).prefix(request.candidateLimit)
     return try database.read { transaction in
@@ -571,6 +606,36 @@ extension MemoryStore {
     // The lane labels are placeholders: this fusion's only output is an order,
     // and the caller labels the whole list `.lexical`.
     return reciprocalRankFusion([(0, assertions), (1, evidence)]).map(\.address)
+  }
+
+  /// Ranks records by the weighted sum of the facets they share with `facets`.
+  ///
+  /// Each facet is one traversal from its shared node to everything tagged with
+  /// it, so the cost follows how much is tagged rather than how much is stored.
+  /// The weighted sums order the lane; reciprocal rank fusion then uses only
+  /// that order, so the weights decide who outranks whom and nothing else.
+  private func facetRanking(
+    _ facets: Set<Facet>, weights: FacetWeights, limit: Int
+  ) throws -> [RecordAddress] {
+    try database.read { transaction in
+      var scores: [RecordAddress: Double] = [:]
+      for facet in facets {
+        let weight = weights.weight(of: facet.kind)
+        for node in try nodesMentioning(facet, in: transaction) {
+          let labels = try transaction.labels(of: node)
+          if labels.contains(Labels.assertion) {
+            scores[RecordAddress(node: node, isAssertion: true), default: 0] += weight
+          } else if labels.contains(Labels.evidence) {
+            scores[RecordAddress(node: node, isAssertion: false), default: 0] += weight
+          }
+        }
+      }
+      return
+        scores
+        .sorted { ($0.value, $0.key.node) > ($1.value, $1.key.node) }
+        .prefix(limit)
+        .map(\.key)
+    }
   }
 
   private func vectorRanking(_ query: String, limit: Int) throws -> [RecordAddress] {

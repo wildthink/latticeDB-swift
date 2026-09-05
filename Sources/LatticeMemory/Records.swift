@@ -35,6 +35,12 @@ public struct Evidence: Sendable, Equatable, Identifiable {
   /// Caller-supplied fields, stored alongside and returned unchanged.
   public var metadata: [String: Value]
 
+  /// What this record is about, as typed references.
+  ///
+  /// Facets are tagged, never inferred: they come from the caller who supplied
+  /// the record, not from an ``Extractor``. See ``Facet``.
+  public var facets: Set<Facet>
+
   /// Whether this record has been forgotten.
   ///
   /// A tombstone keeps its identifier, kind, and timestamps and loses its text
@@ -45,7 +51,7 @@ public struct Evidence: Sendable, Equatable, Identifiable {
 
   public init(
     id: RecordID, kind: String, text: String, scope: Scope, occurredAt: Date, recordedAt: Date,
-    metadata: [String: Value] = [:], isForgotten: Bool = false
+    metadata: [String: Value] = [:], facets: Set<Facet> = [], isForgotten: Bool = false
   ) {
     self.id = id
     self.kind = kind
@@ -54,6 +60,7 @@ public struct Evidence: Sendable, Equatable, Identifiable {
     self.occurredAt = occurredAt
     self.recordedAt = recordedAt
     self.metadata = metadata
+    self.facets = facets
     self.isForgotten = isForgotten
   }
 }
@@ -75,6 +82,12 @@ public struct EvidenceDraft: Sendable, Equatable {
   /// Caller-supplied fields to store alongside.
   public var metadata: [String: Value]
 
+  /// What this record is about, as typed references.
+  ///
+  /// Facets are tagged, never inferred: they come from the caller who supplied
+  /// the record, not from an ``Extractor``. See ``Facet``.
+  public var facets: Set<Facet>
+
   /// An identifier to use instead of a generated one.
   ///
   /// Supply one when an upstream system already has a stable identifier for this
@@ -85,13 +98,14 @@ public struct EvidenceDraft: Sendable, Equatable {
 
   public init(
     kind: String = "message", text: String, scope: Scope = .global, occurredAt: Date? = nil,
-    metadata: [String: Value] = [:], id: RecordID? = nil
+    metadata: [String: Value] = [:], facets: Set<Facet> = [], id: RecordID? = nil
   ) {
     self.kind = kind
     self.text = text
     self.scope = scope
     self.occurredAt = occurredAt
     self.metadata = metadata
+    self.facets = facets
     self.id = id
   }
 }
@@ -156,10 +170,17 @@ public struct Assertion: Sendable, Equatable, Identifiable {
   /// The category of the slot's rule at the time this was written.
   public var category: String?
 
+  /// What this assertion is about.
+  ///
+  /// Inherited from the evidence it was drawn from, so a conclusion is about
+  /// whatever its sources were about. Nothing proposes facets directly: they
+  /// are tagged on the record, and derived work carries them forward.
+  public var facets: Set<Facet>
+
   public init(
     id: RecordID, slot: Slot, value: Value, text: String, scope: Scope, state: AssertionState,
     validFrom: Date, validTo: Date? = nil, evidence: [RecordID], quote: String? = nil,
-    confidence: Double = 1, category: String? = nil
+    confidence: Double = 1, category: String? = nil, facets: Set<Facet> = []
   ) {
     self.id = id
     self.slot = slot
@@ -173,6 +194,7 @@ public struct Assertion: Sendable, Equatable, Identifiable {
     self.quote = quote
     self.confidence = confidence
     self.category = category
+    self.facets = facets
   }
 
   /// Whether this assertion held at `date`.
