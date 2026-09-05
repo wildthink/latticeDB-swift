@@ -107,6 +107,7 @@ public final class MemoryStore {
     try database.createNodeIndex(label: Labels.job, property: Keys.id)
     try database.createNodeIndex(label: Labels.job, property: Keys.jobKey)
     try database.createNodeIndex(label: Labels.job, property: Keys.worker)
+    try database.createNodeIndex(label: Labels.alias, property: Keys.alias)
   }
 
   /// Publishes one of the store's own events, when an event stream is set.
@@ -283,6 +284,7 @@ public final class MemoryStore {
     static let assertion = "Assertion"
     static let note = "Note"
     static let job = "Job"
+    static let alias = "Alias"
   }
 
   enum Edges {
@@ -313,6 +315,9 @@ public final class MemoryStore {
     static let category = "category"
     static let title = "title"
     static let updatedAt = "updatedAt"
+    static let namespace = "namespace"
+    static let alias = "alias"
+    static let canonical = "canonical"
     static let jobKey = "jobKey"
     static let stream = "stream"
     static let sequence = "sequence"

@@ -560,11 +560,13 @@ extension MemoryStore {
     // The full-text index is declared per label, so this is two searches. Their
     // BM25 scores come from different indexes and are not comparable, so the
     // two lists are fused by rank rather than merged by score.
+    // A query naming an alias also searches for what it stands for.
+    let expanded = try expandQuery(query)
     let assertions = try database.fullTextSearch(
-      query, label: Labels.assertion, property: Keys.text, limit: limit
+      expanded, label: Labels.assertion, property: Keys.text, limit: limit
     ).map { RecordAddress(node: $0.node, isAssertion: true) }
     let evidence = try database.fullTextSearch(
-      query, label: Labels.evidence, property: Keys.text, limit: limit
+      expanded, label: Labels.evidence, property: Keys.text, limit: limit
     ).map { RecordAddress(node: $0.node, isAssertion: false) }
     // The lane labels are placeholders: this fusion's only output is an order,
     // and the caller labels the whole list `.lexical`.
