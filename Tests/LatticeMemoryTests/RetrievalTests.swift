@@ -315,3 +315,89 @@ private func seed(
     #expect(filtered.trace.warnings.isEmpty)
   }
 }
+
+// MARK: - Rank explanation
+
+@Test func aLexicalResultNamesTheLaneThatPlacedIt() throws {
+  try withStore { store in
+    try seed(store, text: "Deployments go to the Frankfurt region.", value: "frankfurt")
+
+    let result = try store.retrieve(RetrievalRequest(query: "Frankfurt", mode: .lexical))
+    let item = try #require(result.items.first)
+    guard case .fused(let contributions) = item.explanation else {
+      Issue.record("expected a fused explanation, got \(item.explanation)")
+      return
+    }
+    #expect(contributions.map(\.lane) == [.lexical])
+    #expect(contributions.allSatisfy { $0.position >= 1 })
+    // The contributions are what the score is made of, so they must add up to it.
+    #expect(abs(contributions.reduce(0) { $0 + $1.score } - item.score) < 1e-9)
+  }
+}
+
+@Test func hybridRetrievalReportsBothLanesForARecordBothFound() throws {
+  try withStore(embedder: HashEmbedder(dimensions: 64)) { store in
+    try seed(store, text: "The repository uses pnpm.", value: "pnpm")
+
+    let result = try store.retrieve(RetrievalRequest(query: "pnpm", mode: .hybrid))
+    let lanes = Set(result.items.flatMap(\.explanation.lanes))
+    #expect(lanes == [.lexical, .vector])
+    #expect(result.trace.laneCoverage[.lexical] ?? 0 > 0)
+    #expect(result.trace.laneCoverage[.vector] ?? 0 > 0)
+    // Every lane the trace counted is a lane some returned item actually names.
+    #expect(Set(result.trace.laneCoverage.keys) == lanes)
+  }
+}
+
+@Test func aLaneThatPlacesNothingIsNamedInTheTrace() throws {
+  // Without an embedder the vector lane returns nothing and hybrid retrieval
+  // silently runs on one lane. The trace is the only place that shows it.
+  try withStore { store in
+    try seed(store, text: "The repository uses pnpm.", value: "pnpm")
+
+    let result = try store.retrieve(RetrievalRequest(query: "pnpm", mode: .hybrid))
+    #expect(!result.items.isEmpty)
+    #expect(result.trace.laneCoverage[.vector] == nil)
+    #expect(result.trace.warnings.contains("the vector lane placed none of the returned records"))
+  }
+}
+
+@Test func pinnedAndRecencyResultsSayTheyWereNotRanked() throws {
+  try withStore { store in
+    try store.pin("Always deploy on Tuesdays.", title: "cadence")
+    try seed(store, text: "The repository uses pnpm.", value: "pnpm")
+
+    let result = try store.retrieve(RetrievalRequest(mode: .recency))
+    var pinned: [RetrievedItem] = []
+    var ranked: [RetrievedItem] = []
+    for item in result.items {
+      switch item.record {
+      case .note: pinned.append(item)
+      case .assertion, .evidence: ranked.append(item)
+      }
+    }
+
+    #expect(pinned.count == 1)
+    for item in pinned {
+      guard case .pinned = item.explanation else {
+        Issue.record("expected a pinned explanation, got \(item.explanation)")
+        continue
+      }
+    }
+
+    #expect(!ranked.isEmpty)
+    let positions = ranked.map { item -> Int in
+      switch item.explanation {
+      case .recency(let position): return position
+      case .pinned, .fused: return -1
+      }
+    }
+    // Every ranked record carries a position, and they are the recency order
+    // itself, so they arrive already ascending.
+    #expect(!positions.contains(-1))
+    #expect(positions == positions.sorted())
+    // Nothing that skipped lane ranking claims a lane.
+    #expect(result.items.allSatisfy { $0.explanation.lanes.isEmpty })
+    #expect(result.trace.laneCoverage.isEmpty)
+  }
+}

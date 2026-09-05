@@ -125,6 +125,18 @@ public enum RetrievedRecord: Sendable {
   case note(PinnedNote)
 }
 
+/// The text of a record, whichever kind it is.
+///
+/// The budget has to measure a record before there is a ``RetrievedItem`` to
+/// hold it, so this is a function rather than only a property on the item.
+func retrievedText(of record: RetrievedRecord) -> String {
+  switch record {
+  case .evidence(let evidence): return evidence.text
+  case .assertion(let assertion): return assertion.text
+  case .note(let note): return note.text
+  }
+}
+
 /// One retrieved record, with why it ranked where it did and what it cost.
 public struct RetrievedItem: Sendable {
   /// The record itself.
@@ -132,10 +144,14 @@ public struct RetrievedItem: Sendable {
 
   /// The rank score. Higher is better; the scale depends on the
   /// ``SearchMode`` and is meaningful only for comparing items in one result.
+  /// ``explanation`` says what produced it.
   public let score: Double
 
   /// What this cost against the request's ``Budget``.
   public let cost: Int
+
+  /// How the ranking arrived at ``score``.
+  public let explanation: RankExplanation
 
   /// The record's identifier.
   public var id: RecordID {
@@ -147,13 +163,7 @@ public struct RetrievedItem: Sendable {
   }
 
   /// The record's text.
-  public var text: String {
-    switch record {
-    case .evidence(let evidence): return evidence.text
-    case .assertion(let assertion): return assertion.text
-    case .note(let note): return note.text
-    }
-  }
+  public var text: String { retrievedText(of: record) }
 }
 
 /// A group of retrieved items sharing a heading.
@@ -167,6 +177,56 @@ public struct RetrievalSection: Sendable {
 
   /// The items in it, in rank order.
   public let items: [RetrievedItem]
+}
+
+/// A source of ranking evidence.
+public enum RankingLane: String, Sendable, CaseIterable {
+  /// BM25 over the full-text indexes.
+  case lexical
+
+  /// Nearest neighbors of the query's embedding.
+  case vector
+}
+
+/// One lane's contribution to a fused score.
+public struct LaneContribution: Sendable {
+  /// Which lane placed the record.
+  public let lane: RankingLane
+
+  /// Where in that lane's ranking it landed, counting from 1.
+  public let position: Int
+
+  /// What that placement added to the fused score: `1 / (k + position)`.
+  public let score: Double
+}
+
+/// Why a record ranked where it did.
+///
+/// ``RetrievedItem/score`` is a bare number whose scale depends on the
+/// ``SearchMode``. This says what produced it, so a result that ranks
+/// surprisingly can be read rather than guessed at.
+///
+/// It explains the fusion, not the relevance: it reports that the vector lane
+/// placed a record third and the lexical lane did not place it at all, not
+/// which terms matched. Per-term attribution would need BM25 internals the
+/// index does not expose.
+public enum RankExplanation: Sendable {
+  /// Pinned, so not ranked at all. Its score is infinite by construction.
+  case pinned
+
+  /// Ordered by timestamp alone. The score is seconds since 1970.
+  case recency(position: Int)
+
+  /// Fused from the lanes that placed it, by reciprocal rank.
+  ///
+  /// A record only one lane found is still fused, with one contribution.
+  case fused([LaneContribution])
+
+  /// The lanes that placed this record, empty when it was not ranked.
+  public var lanes: [RankingLane] {
+    guard case .fused(let contributions) = self else { return [] }
+    return contributions.map(\.lane)
+  }
 }
 
 /// Why a candidate did not survive to the result.
@@ -201,6 +261,15 @@ public struct RetrievalTrace: Sendable {
 
   /// How many candidates each rule dropped.
   public let dropped: [DropReason: Int]
+
+  /// How many returned items each lane placed.
+  ///
+  /// A lane missing here contributed nothing to the result. An embedder whose
+  /// dimensions do not match the database returns no matches rather than
+  /// failing, so ``SearchMode/hybrid`` quietly degrading to lexical alone looks
+  /// exactly like hybrid working — until this says the vector lane placed
+  /// nothing.
+  public let laneCoverage: [RankingLane: Int]
 
   /// The total cost of what was returned.
   public let cost: Int
@@ -266,7 +335,7 @@ extension MemoryStore {
     let pinned =
       request.kinds.contains(.notes)
       ? try notes(in: request.scope).map {
-        Candidate(record: .note($0), score: .infinity)
+        Candidate(record: .note($0), score: .infinity, explanation: .pinned)
       }
       : []
     let ranked = pinned + (try candidates(for: request, mode: mode))
@@ -274,7 +343,8 @@ extension MemoryStore {
     var dropped: [DropReason: Int] = [:]
     func drop(_ reason: DropReason) { dropped[reason, default: 0] += 1 }
 
-    var surviving: [(record: RetrievedRecord, score: Double)] = []
+    var surviving: [(record: RetrievedRecord, score: Double, explanation: RankExplanation)] =
+      []
     for candidate in ranked {
       switch candidate.record {
       case .assertion(let assertion):
@@ -329,7 +399,7 @@ extension MemoryStore {
           continue
         }
       }
-      surviving.append((candidate.record, candidate.score))
+      surviving.append((candidate.record, candidate.score, candidate.explanation))
     }
 
     if request.suppressesCitedEvidence {
@@ -350,16 +420,22 @@ extension MemoryStore {
     var spent = 0
     var overBudget = 0
     for entry in surviving {
-      let text = RetrievedItem(record: entry.record, score: entry.score, cost: 0).text
-      let cost = request.budget.measure(text)
+      let cost = request.budget.measure(retrievedText(of: entry.record))
       if let limit = request.budget.limit, spent + cost > limit {
         overBudget += 1
         continue
       }
       spent += cost
-      items.append(RetrievedItem(record: entry.record, score: entry.score, cost: cost))
+      items.append(
+        RetrievedItem(
+          record: entry.record, score: entry.score, cost: cost, explanation: entry.explanation))
     }
     if overBudget > 0 { dropped[.overBudget] = overBudget }
+
+    var laneCoverage: [RankingLane: Int] = [:]
+    for item in items {
+      for lane in item.explanation.lanes { laneCoverage[lane, default: 0] += 1 }
+    }
 
     var warnings: [String] = []
     if overBudget > 0 {
@@ -368,13 +444,20 @@ extension MemoryStore {
     if ranked.isEmpty, request.query != nil {
       warnings.append("the query matched nothing before filtering")
     }
+    // A lane that placed nothing is worth saying out loud: hybrid retrieval
+    // running on one lane returns plausible results and gives no other sign.
+    if mode == .hybrid, !items.isEmpty {
+      for lane in RankingLane.allCases where laneCoverage[lane] == nil {
+        warnings.append("the \(lane.rawValue) lane placed none of the returned records")
+      }
+    }
 
     return RetrievalResult(
       items: items,
       sections: sections(from: items),
       trace: RetrievalTrace(
-        mode: mode, candidates: ranked.count, dropped: dropped, cost: spent,
-        limit: request.budget.limit, warnings: warnings))
+        mode: mode, candidates: ranked.count, dropped: dropped, laneCoverage: laneCoverage,
+        cost: spent, limit: request.budget.limit, warnings: warnings))
   }
 
   private func resolve(_ mode: SearchMode, for request: RetrievalRequest) -> SearchMode {
@@ -412,6 +495,7 @@ extension MemoryStore {
   private struct Candidate {
     var record: RetrievedRecord
     var score: Double
+    var explanation: RankExplanation
   }
 
   private func candidates(for request: RetrievalRequest, mode: SearchMode) throws -> [Candidate] {
@@ -419,18 +503,23 @@ extension MemoryStore {
       return try recencyOrdered(limit: request.candidateLimit)
     }
 
-    var rankings: [[RecordAddress]] = []
+    var rankings: [(lane: RankingLane, addresses: [RecordAddress])] = []
     if mode == .lexical || mode == .hybrid {
-      rankings.append(try lexicalRanking(query, limit: request.candidateLimit))
+      rankings.append((.lexical, try lexicalRanking(query, limit: request.candidateLimit)))
     }
     if mode == .vector || mode == .hybrid {
-      rankings.append(try vectorRanking(query, limit: request.candidateLimit))
+      rankings.append((.vector, try vectorRanking(query, limit: request.candidateLimit)))
     }
 
     let fused = reciprocalRankFusion(rankings).prefix(request.candidateLimit)
     return try database.read { transaction in
       try fused.map { entry in
-        Candidate(record: try load(entry.address, in: transaction), score: entry.score)
+        Candidate(
+          record: try load(entry.address, in: transaction), score: entry.score,
+          explanation: .fused(
+            entry.contributions.map {
+              LaneContribution(lane: $0.lane, position: $0.position, score: $0.score)
+            }))
       }
     }
   }
@@ -458,7 +547,12 @@ extension MemoryStore {
         candidates
         .sorted { $0.1 > $1.1 }
         .prefix(limit)
-        .map { Candidate(record: $0.0, score: $0.1.timeIntervalSince1970) }
+        .enumerated()
+        .map {
+          Candidate(
+            record: $0.element.0, score: $0.element.1.timeIntervalSince1970,
+            explanation: .recency(position: $0.offset + 1))
+        }
     }
   }
 
@@ -472,7 +566,9 @@ extension MemoryStore {
     let evidence = try database.fullTextSearch(
       query, label: Labels.evidence, property: Keys.text, limit: limit
     ).map { RecordAddress(node: $0.node, isAssertion: false) }
-    return reciprocalRankFusion([assertions, evidence]).map(\.address)
+    // The lane labels are placeholders: this fusion's only output is an order,
+    // and the caller labels the whole list `.lexical`.
+    return reciprocalRankFusion([(0, assertions), (1, evidence)]).map(\.address)
   }
 
   private func vectorRanking(_ query: String, limit: Int) throws -> [RecordAddress] {
@@ -509,18 +605,31 @@ extension MemoryStore {
   /// `1 / (k + position)` in every list it appears in and sums those, which
   /// needs nothing from the rankings but their order. An item both rankings
   /// place highly beats one that either alone puts first.
-  private func reciprocalRankFusion(
-    _ rankings: [[RecordAddress]], k: Double = 60
-  ) -> [(address: RecordAddress, score: Double)] {
+  ///
+  /// Each lane's placement is reported alongside the fused score rather than
+  /// folded away, so a result can say which lane put a record where. `Lane` is
+  /// unconstrained because the caller decides what a lane is: the two full-text
+  /// indexes are fused into one ``RankingLane/lexical`` list, and that list is
+  /// then fused with the vector lane.
+  private func reciprocalRankFusion<Lane>(
+    _ rankings: [(lane: Lane, addresses: [RecordAddress])], k: Double = 60
+  ) -> [(
+    address: RecordAddress, score: Double,
+    contributions: [(lane: Lane, position: Int, score: Double)]
+  )] {
     var scores: [RecordAddress: Double] = [:]
+    var contributions: [RecordAddress: [(lane: Lane, position: Int, score: Double)]] = [:]
     for ranking in rankings {
-      for (index, address) in ranking.enumerated() {
-        scores[address, default: 0] += 1 / (k + Double(index + 1))
+      for (index, address) in ranking.addresses.enumerated() {
+        let position = index + 1
+        let contribution = 1 / (k + Double(position))
+        scores[address, default: 0] += contribution
+        contributions[address, default: []].append((ranking.lane, position, contribution))
       }
     }
     return
       scores
       .sorted { ($0.value, $0.key.node) > ($1.value, $1.key.node) }
-      .map { (address: $0.key, score: $0.value) }
+      .map { (address: $0.key, score: $0.value, contributions: contributions[$0.key] ?? []) }
   }
 }
