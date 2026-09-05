@@ -87,7 +87,7 @@ extension MemoryStore {
       var asserted: [Assertion] = []
       var superseded: [RecordID] = []
       for proposal in proposals {
-        switch validate(proposal, against: [evidence]) {
+        switch validate(try canonicalize(proposal, in: transaction), against: [evidence]) {
         case .failure(let reason):
           rejected.append(Rejection(proposal: proposal, reason: reason))
         case .success(let checked):
@@ -145,7 +145,7 @@ extension MemoryStore {
         nodes.append(node)
         stored.append(try readEvidence(node, in: transaction))
       }
-      switch validate(proposal, against: stored) {
+      switch validate(try canonicalize(proposal, in: transaction), against: stored) {
       case .failure(let reason):
         throw Rejection(proposal: proposal, reason: reason)
       case .success(let checked):
