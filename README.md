@@ -230,7 +230,8 @@ let records = try database.readStream("articles.indexed", after: cursor, limit: 
 
 ## Evidence And Assertions
 
-The `LatticeMemory` library is a second product in this package. It stores raw
+The `LatticeMemory` library is a second product in this package, built on
+`LatticeDB` as ordinary nodes and edges. It stores raw
 **evidence** that is never rewritten, and **assertions** derived from it that
 carry a link back to the evidence — and, where a rule asks for one, the verbatim
 quote they were read from.
@@ -281,17 +282,54 @@ result.items                       // the ranking
 result.sections                    // grouped for assembly into a document
 result.trace.candidates            // what ranking produced, before filtering
 result.trace.dropped[.outOfScope]  // how many the scope excluded
+result.trace.laneCoverage[.vector] // how many returned items that lane placed
+result.items.first?.explanation    // which lanes placed this one, and where
 ```
 
 Ranking is lexical by default, and hybrid — BM25 and vectors fused by reciprocal
 rank — when the store is given a `TextEmbedder`. `HashEmbedder` needs no network
 and is deterministic; `RemoteEmbedder` wraps an HTTP embedding service. A
-`Budget` counts characters, items, or whatever you supply a measure for.
+`Budget` counts characters, items, or whatever you supply a measure for. Each
+item's `RankExplanation` names the lanes that placed it and where, so a
+surprising ranking can be read rather than guessed at, and `laneCoverage` says
+what each lane contributed — an embedder whose dimensions do not match the
+database returns nothing rather than failing, and that is where it shows.
+
+Records can also be tagged with **facets** — typed references to what a record is
+about, as opposed to what it says. A facet ranks exactly: a record tagged
+`Facet("person", "sam")` is found whether or not the text spells the name.
+Facets rank rather than filter, so an untagged record still comes back when the
+query finds it; `records(mentioning:)` is there when you want only what is
+tagged. They are tagged, never proposed — an assertion inherits its evidence's
+facets, so an extractor cannot invent what a record is about.
+
+```swift
+try store.record(
+    EvidenceDraft(text: "Shipped the rollout.", facets: [Facet("person", "sam")])
+)
+
+let mine = try store.retrieve(
+    RetrievalRequest(query: "rollout", facets: [Facet("person", "sam")])
+)
+let everything = try store.records(mentioning: [Facet("person", "sam")])
+```
+
+An **alias** connects two spellings of one term. Aliases resolve on the way in,
+canonicalizing a slot's values so `PNPM` and `pnpm` are one value for
+supersession and `allowedValues`, and on the way out, expanding query text so a
+query naming an alias finds what it stands for. They apply from when they are
+written and do not rewrite what is already stored.
+
+```swift
+try store.alias("PNPM", to: "pnpm", in: .values(of: "package.manager"))
+try store.alias("fra", to: "Frankfurt", in: .query)
+```
 
 `forget` removes a record and everything concluded from it. An assertion that
 loses all of its supporting evidence is retracted and redacted — including the
-quote, which is a verbatim copy of the text being forgotten; one that keeps some
-support stands without the forgotten citations. Preview the closure first, since
+quote, which is a verbatim copy of the text being forgotten, and the facets,
+because what a record was about is as revealing as what it said; one that keeps
+some support stands without the forgotten citations. Preview the closure first, since
 it reaches further than the selection:
 
 ```swift

@@ -2,9 +2,11 @@
 
 ## Purpose
 
-This package provides two products over the same LatticeDB native engine:
+This package provides three products over the same LatticeDB native engine:
 
 - `LatticeDB`: an embeddable Swift property-graph library.
+- `LatticeMemory`: evidence, assertions, retrieval, and forgetting, built on
+  `LatticeDB` as ordinary nodes and edges.
 - `lattice`: a CLI with an ArgumentParser command tree and a CommandREPL shell.
 
 The project intentionally keeps the Swift API separate from how the native
@@ -16,6 +18,7 @@ library is acquired on each platform.
 LatticeDB (Swift API) ──> LatticeBridge (C adapter) ──> Lattice C ABI
                                      ├── CLatticeApple (static XCFramework)
                                      └── CLatticeLinux (pkg-config system library)
+LatticeMemory ──> LatticeDB
 lattice CLI ──> LatticeDB + ArgumentParser + CommandREPL
 ```
 
@@ -91,23 +94,54 @@ asymmetric: `Cypher` and the typed `Database.match` family run native read-only
 queries, while every write goes through the plan or the transaction API, because
 the bridge rejects queries that write. Typed `PropertyKey` reads currently decode
 the bridge's JSON property encoding; replacing that with a typed native read is
-an internal change, not an API one. See `Docs/Plan-BuilderAndQueryAPI.md`.
+an internal change, not an API one. See the `BuildingGraphPlans` and
+`QueryingAndUpdating` articles in `Sources/LatticeDB/LatticeDB.docc/Articles`.
 
 `TemporalValidity` and `TemporalAsOf` implement an opt-in valid-time property
 convention. They qualify currently stored records using `validFrom`/`validTo`;
 they are not native historical `as-of` snapshots. Do not add an `asOf`
 transaction API until upstream exposes snapshot selection through the C ABI.
 
+## LatticeMemory Boundaries
+
+`MemoryStore` owns every mutation. Evidence is never rewritten; assertions are
+derived and superseded rather than overwritten; ``Scope`` is checked on every
+read. Extractors propose and the `MemorySchema` disposes, which is what makes an
+unaudited extractor safe to run.
+
+Two invariants are easy to break by accident:
+
+- **Facets are tagged, not proposed.** `EvidenceDraft` carries them and
+  `AssertionProposal` does not; an assertion inherits its evidence's facets when
+  it commits. Letting an extractor name a facet would move the trust boundary.
+- **Redaction must reach everything derived from a record.** `forget` already
+  redacts text, quotes, values, vectors, and facets, and prunes a facet left
+  tagging nothing. Anything added to a record later has to be redacted here too.
+
+Aliases resolve on the way in (canonicalizing assertion values, per slot) and on
+the way out (expanding query text). They apply from when they are written and do
+not rewrite stored records.
+
+## Documentation
+
+`make docs` and `make docs-memory` build the two DocC archives, one per target,
+both with `--warnings-as-errors`. A cross-target symbol link resolves in neither
+archive, which is why they are built separately. `Notes/` holds findings that
+belong with the repository but are not documentation — it sits outside every
+target path, so nothing there is compiled.
+
 ## Verification And Release Checklist
 
 1. Run `make test`; it rebuilds native macOS artifacts and runs Swift tests.
-2. Run `swift format lint Package.swift Sources Tests` and `xcrun clang-format
+2. Run `make docs` and `make docs-memory`; both treat documentation warnings as
+   errors, so a broken symbol link or a renamed type fails them.
+3. Run `swift format lint Package.swift Sources Tests` and `xcrun clang-format
    --dry-run` on modified bridge C/header files.
-3. Review `git diff --check` and ensure no generated `.build`, `.native`,
+4. Review `git diff --check` and ensure no generated `.build`, `.native`,
    `.zig-cache`, or `Artifacts` output is staged.
-4. For native changes, verify the CI workflow on both macOS and Ubuntu before
+5. For native changes, verify the CI workflow on both macOS and Ubuntu before
    publishing a release.
-5. If upstream LatticeDB changed, run `make update-native VERSION=x.y.z`, then
+6. If upstream LatticeDB changed, run `make update-native VERSION=x.y.z`, then
    rebuild the artifact from the same source revision. Run `make check-upstream`
    to discover releases; the weekly `Upstream Release Check` workflow reports
    new tags but never updates the lock automatically.

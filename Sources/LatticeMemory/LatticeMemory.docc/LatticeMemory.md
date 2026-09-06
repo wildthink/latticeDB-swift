@@ -14,7 +14,7 @@ quotes the exact span of text it was read from — a quote the store checks
 appears verbatim before it writes anything. So "why does the system believe
 this?" is a query, not an investigation.
 
-Three rules do most of the work:
+A handful of rules do most of the work:
 
 - **Values are superseded, not overwritten.** Writing a new value for a
   single-valued slot closes the old one's valid interval and leaves it readable.
@@ -26,8 +26,15 @@ Three rules do most of the work:
 - **Extractors propose; the store decides.** An ``Extractor`` can suggest
   anything. The ``MemorySchema`` decides what is actually written.
 - **Retrieval explains itself.** ``MemoryStore/retrieve(_:)`` returns a bounded,
-  scoped, ranked set of records and a ``RetrievalTrace`` accounting for every
-  candidate it discarded.
+  scoped, ranked set of records, a ``RetrievalTrace`` accounting for every
+  candidate it discarded, and a ``RankExplanation`` on each item naming the
+  lanes that placed it.
+- **Records can be tagged with what they are about.** A ``Facet`` is a typed
+  reference — a person, a project — that ranks exactly, so a record about
+  someone is found whether or not the text spells their name.
+- **Two spellings can be one term.** An ``Alias`` maps a term to a canonical
+  form, resolved on the way in so a slot holds one spelling of a value, and on
+  the way out so a query naming an alias finds what it stands for.
 - **Some things are not ranked.** A ``PinnedNote`` is always included within its
   scope, and a ``Consolidator`` folds many records into one conclusion that cites
   all of them.
@@ -106,7 +113,7 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 - ``MemoryStore/notes(in:)``
 - ``MemoryStore/note(title:scope:)``
 
-### Retrieval
+### Retrieving Records
 
 - <doc:Retrieval>
 - ``MemoryStore/retrieve(_:)``
@@ -119,7 +126,7 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 - ``RecordKinds``
 - ``Budget``
 
-### Forgetting
+### Forgetting Records
 
 - <doc:Forgetting>
 - ``MemoryStore/forget(_:)``
@@ -148,10 +155,29 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 - ``JobState``
 - ``JobRunReport``
 
+### Facets
+
+- ``Facet``
+- ``FacetWeights``
+- ``MemoryStore/facets(of:)``
+- ``MemoryStore/records(mentioning:)``
+
+### Aliases
+
+- ``Alias``
+- ``AliasNamespace``
+- ``MemoryStore/alias(_:to:in:)``
+- ``MemoryStore/unalias(_:in:)``
+- ``MemoryStore/canonical(for:in:)``
+- ``MemoryStore/aliases(in:)``
+
 ### Explaining a Result
 
 - ``RetrievalTrace``
 - ``DropReason``
+- ``RankExplanation``
+- ``RankingLane``
+- ``LaneContribution``
 
 ### Embedding
 
@@ -164,3 +190,4 @@ let current = try store.currentAssertions(in: ["project": "acme"])
 - ``MemoryError``
 - ``Rejection``
 - ``RejectionReason``
+- ``AliasError``
