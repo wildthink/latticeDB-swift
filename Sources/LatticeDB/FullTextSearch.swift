@@ -147,7 +147,9 @@ private func executeFullTextSearch(
         }
       }
     }
-  } transform: { TextMatch(node: $0, score: $1) }
+  } transform: {
+    TextMatch(node: $0, score: $1)
+  }
 }
 
 /// Runs a native search that returns parallel identifier and score arrays, and

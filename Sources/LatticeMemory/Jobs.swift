@@ -327,7 +327,8 @@ extension MemoryStore {
   }
 
   private func write(_ job: Job, key: String, in transaction: Transaction) throws {
-    let node = try jobNode(key: key, in: transaction)
+    let node =
+      try jobNode(key: key, in: transaction)
       ?? transaction.createNode(label: Labels.job)
     try transaction.setProperty(Keys.id, onNode: node, to: .string(job.id.rawValue))
     try transaction.setProperty(Keys.jobKey, onNode: node, to: .string(key))

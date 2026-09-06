@@ -193,8 +193,9 @@ private func at(_ day: Int) -> Date {
     #expect(try store.evidence(result.evidence.id) != nil)
     #expect(result.asserted.count == 1)
     #expect(result.rejected.count == 1)
-    if case .extractorFailed = result.rejected[0].reason {} else {
+    guard case .extractorFailed = result.rejected[0].reason else {
       Issue.record("expected an extractorFailed rejection, got \(result.rejected[0].reason)")
+      return
     }
   }
 }
@@ -228,13 +229,16 @@ private func at(_ day: Int) -> Date {
     try store.record(
       EvidenceDraft(text: "We switched to pnpm.", scope: ["project": "acme"], occurredAt: at(3)))
 
-    #expect(try store.assertions(validAt: at(2), in: ["project": "acme"]).map(\.value)
-      == [.string("npm")])
-    #expect(try store.assertions(validAt: at(4), in: ["project": "acme"]).map(\.value)
-      == [.string("pnpm")])
+    #expect(
+      try store.assertions(validAt: at(2), in: ["project": "acme"]).map(\.value)
+        == [.string("npm")])
+    #expect(
+      try store.assertions(validAt: at(4), in: ["project": "acme"]).map(\.value)
+        == [.string("pnpm")])
     // The interval is half-open, so the instant of replacement belongs to the new value.
-    #expect(try store.assertions(validAt: at(3), in: ["project": "acme"]).map(\.value)
-      == [.string("pnpm")])
+    #expect(
+      try store.assertions(validAt: at(3), in: ["project": "acme"]).map(\.value)
+        == [.string("pnpm")])
     #expect(try store.assertions(validAt: at(0), in: ["project": "acme"]).isEmpty)
   }
 }

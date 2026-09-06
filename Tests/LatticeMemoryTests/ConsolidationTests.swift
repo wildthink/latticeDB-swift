@@ -161,8 +161,9 @@ private func at(_ day: Int) -> Date {
     let result = try store.consolidate(.matching(kinds: ["message"]), using: FailingConsolidator())
     #expect(result.asserted.isEmpty)
     #expect(result.rejected.count == 1)
-    if case .extractorFailed = result.rejected[0].reason {} else {
+    guard case .extractorFailed = result.rejected[0].reason else {
       Issue.record("expected extractorFailed, got \(result.rejected[0].reason)")
+      return
     }
   }
 }

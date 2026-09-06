@@ -93,5 +93,7 @@ private func executeVectorSearch(
         database, transaction, buffer.baseAddress, UInt32(vector.count),
         UInt32(clamping: limit), efSearch, ids, distances, count)
     }
-  } transform: { VectorMatch(node: $0, distance: $1) }
+  } transform: {
+    VectorMatch(node: $0, distance: $1)
+  }
 }
