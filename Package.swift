@@ -23,17 +23,17 @@ var latticeTargets: [Target] = [
 ]
 
 #if os(Linux)
-// Only Linux needs pkg-config. Declaring this target on Apple platforms makes
-// SwiftPM probe for lattice.pc even though CLatticeApple supplies the library.
-latticeBridgeDependencies = [
-  .target(name: "CLatticeLinux")
-]
-latticeTargets.append(
-  .systemLibrary(
-    name: "CLatticeLinux",
-    pkgConfig: "lattice"
+  // Only Linux needs pkg-config. Declaring this target on Apple platforms makes
+  // SwiftPM probe for lattice.pc even though CLatticeApple supplies the library.
+  latticeBridgeDependencies = [
+    .target(name: "CLatticeLinux")
+  ]
+  latticeTargets.append(
+    .systemLibrary(
+      name: "CLatticeLinux",
+      pkgConfig: "lattice"
+    )
   )
-)
 #endif
 
 let package = Package(

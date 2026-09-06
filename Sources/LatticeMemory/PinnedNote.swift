@@ -136,8 +136,9 @@ extension MemoryStore {
       return value
     }
     let id = RecordID(try string(Keys.id))
-    guard case .integer(let milliseconds) = try transaction.propertyValue(
-      Keys.updatedAt, ofNode: node)
+    guard
+      case .integer(let milliseconds) = try transaction.propertyValue(
+        Keys.updatedAt, ofNode: node)
     else {
       throw MemoryError.malformedRecord(id, "updatedAt is missing or is not a timestamp")
     }
