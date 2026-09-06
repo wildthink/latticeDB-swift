@@ -21,7 +21,8 @@ for item in result.items { print(item.text) }
 
 ## The pipeline
 
-1. **Generate candidates** in the requested ``SearchMode``.
+1. **Generate candidates** from every lane in play — the ``SearchMode``'s
+   lanes, plus the facet lane when the request names facets — fused by rank.
 2. **Drop anything outside the scope.** Checked here as everywhere else.
 3. **Apply time.** Assertions must hold at ``RetrievalRequest/validAt``, or be
    current when it is `nil`; evidence must fall inside
@@ -53,7 +54,72 @@ is ever made between a BM25 score and a distance.
 ``SearchMode/recency`` ignores the query and returns newest first.
 ``SearchMode/automatic`` — the default — picks hybrid when there is a query and
 an embedder, lexical when there is a query but no embedder, and recency when
-there is no query.
+there is neither a query nor facets.
+
+## Facets
+
+A ``Facet`` is a typed reference a record is tagged with: a kind and an
+identifier, both yours to choose. Facets are what a record *concerns*, as opposed
+to what it *says*, and matching them is exact — a record tagged
+`Facet("person", "sam")` matches whether or not the text spells the name, and a
+record that merely uses the word does not match unless it was tagged.
+
+```swift
+try store.record(
+  EvidenceDraft(text: "Shipped the rollout.", facets: [Facet("person", "sam")]))
+
+let result = try store.retrieve(
+  RetrievalRequest(
+    query: "rollout",
+    facets: [Facet("person", "sam")],
+    facetWeights: ["person": 4, "project": 1]))
+```
+
+Facets are tagged, never proposed. ``EvidenceDraft`` carries them and
+``AssertionProposal`` does not: an assertion inherits the union of its evidence's
+facets when it commits, so a conclusion is about whatever its sources were about.
+An ``Extractor`` cannot invent what a record is about, which keeps the trust
+boundary where the ``MemorySchema`` already put it.
+
+**Facets rank; they do not filter.** A record tagged with none of the requested
+facets still comes back when the query finds it — the tagged one simply leads.
+Use ``MemoryStore/records(mentioning:)`` when you want only what is tagged; it
+answers from the graph rather than from a ranking, so it is exact and unbudgeted.
+
+``FacetWeights`` decides which kind counts for more. The weights order the lane
+and nothing else: reciprocal rank fusion uses only that order, so they settle who
+outranks whom without ever being compared against a BM25 score.
+
+The lane runs alongside whichever mode is in force, so facets and query text
+combine rather than compete, and facets with no query rank on their own instead
+of falling back to recency. The one exception is an explicit
+``SearchMode/recency``, which asks for the newest records and so ignores every
+relevance signal, facets included.
+
+Storage is one shared node per facet with an edge from each record carrying it,
+so the cost of a facet lookup follows how many records carry it rather than how
+many the store holds. Forgetting detaches a record's facets and prunes any facet
+left tagging nothing: what a record was about is as revealing as what it said.
+
+## Aliases
+
+An ``Alias`` maps a term to a canonical form within an ``AliasNamespace``.
+Retrieval consults the ``AliasNamespace/query`` namespace and appends the
+canonical form of every alias the query mentions before searching, so a query
+naming an alias finds what it stands for.
+
+```swift
+try store.alias("fra", to: "Frankfurt", in: .query)
+try store.retrieve(RetrievalRequest(query: "fra", mode: .lexical))  // finds Frankfurt
+```
+
+Terms are appended rather than substituted, so the words actually typed still
+rank and BM25 treats the result as the bag of words it is. Both the whole query
+and each of its words are looked up, so a multi-word alias resolves as readily as
+a single term, and a canonical term the query already contains is not repeated.
+
+Aliases also apply on the way in, where they canonicalize assertion values rather
+than queries — see ``MemoryStore/alias(_:to:in:)``.
 
 ## Embedding
 
@@ -106,6 +172,7 @@ identical in ``RetrievalResult/trace``.
 result.trace.candidates            // what ranking produced, before filtering
 result.trace.dropped[.outOfScope]  // how many the scope excluded
 result.trace.cost                  // what the returned items cost
+result.trace.laneCoverage[.vector] // how many returned items that lane placed
 result.wasTruncated                // whether the budget cut it short
 ```
 
@@ -113,6 +180,35 @@ Candidates always balance: returned items plus every drop count equals
 ``RetrievalTrace/candidates``. Zero candidates with a query means the query
 matched nothing; many candidates and no items means your filters ate them, and
 the counts say which one.
+
+``RetrievalTrace/laneCoverage`` says what each lane contributed. A lane missing
+from it placed nothing, which is worth knowing because the failure is otherwise
+invisible: an embedder whose dimensions do not match the database returns no
+matches rather than failing, so hybrid retrieval quietly running on one lane
+looks exactly like hybrid retrieval working. Hybrid adds a warning when a lane
+places nothing.
+
+## Why one record outranked another
+
+Each ``RetrievedItem`` carries a ``RankExplanation`` saying what produced its
+score — pinned, ordered by recency, or fused from the lanes that placed it, with
+each lane's position and contribution.
+
+```swift
+for item in result.items {
+  switch item.explanation {
+  case .pinned:                    print("always included")
+  case .recency(let position):     print("newest, #\(position)")
+  case .fused(let contributions):
+    for c in contributions { print(c.lane, c.position, c.score) }
+  }
+}
+```
+
+It explains the fusion, not the relevance: it reports that the vector lane placed
+a record third and the lexical lane did not place it at all, not which terms
+matched. Per-term attribution would need BM25 internals the index does not
+expose.
 
 ## Assembling output
 
@@ -127,3 +223,5 @@ It is deliberately plain; when the layout matters, walk the sections yourself.
 
 - <doc:EvidenceAndAssertions>
 - ``MemoryStore/retrieve(_:)``
+- ``Facet``
+- ``Alias``

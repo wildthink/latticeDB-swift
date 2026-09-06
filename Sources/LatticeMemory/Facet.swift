@@ -127,12 +127,14 @@ extension MemoryStore {
     let existing = try self.facets(ofNode: node, in: transaction)
     for facet in facets.sorted(by: { $0.description < $1.description }) {
       guard !existing.contains(facet) else { continue }
-      let target = try facetNode(facet, in: transaction) ?? {
-        let created = try transaction.createNode(label: Labels.facet)
-        try transaction.setProperty(Keys.facetKind, onNode: created, to: .string(facet.kind))
-        try transaction.setProperty(Keys.facetID, onNode: created, to: .string(facet.id))
-        return created
-      }()
+      let target: NodeID
+      if let shared = try facetNode(facet, in: transaction) {
+        target = shared
+      } else {
+        target = try transaction.createNode(label: Labels.facet)
+        try transaction.setProperty(Keys.facetKind, onNode: target, to: .string(facet.kind))
+        try transaction.setProperty(Keys.facetID, onNode: target, to: .string(facet.id))
+      }
       _ = try transaction.createEdge(from: node, to: target, type: Edges.mentions)
     }
   }
