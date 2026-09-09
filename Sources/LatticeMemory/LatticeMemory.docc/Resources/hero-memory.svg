@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" role="img" aria-label="Records linked to the evidence beneath them.">
+  <defs>
+    <style>
+      .a { fill: #7fb0f0; }
+      .e { fill: #6fd3a8; }
+      .p { fill: #f0a868; }
+      .l { stroke: #c3cedb; stroke-width: 2; opacity: .75; }
+    </style>
+  </defs>
+  <line class="l" x1="150" y1="90" x2="110" y2="280"/>
+  <line class="l" x1="150" y1="90" x2="260" y2="280"/>
+  <line class="l" x1="330" y1="70" x2="260" y2="280"/>
+  <line class="l" x1="330" y1="70" x2="410" y2="280"/>
+  <line class="l" x1="500" y1="100" x2="410" y2="280"/>
+  <line class="l" x1="500" y1="100" x2="550" y2="280"/>
+  <circle class="a" cx="150" cy="90" r="28"/>
+  <circle class="a" cx="330" cy="70" r="34"/>
+  <circle class="p" cx="500" cy="100" r="26"/>
+  <rect class="e" x="80" y="262" width="60" height="36" rx="8"/>
+  <rect class="e" x="230" y="262" width="60" height="36" rx="8"/>
+  <rect class="e" x="380" y="262" width="60" height="36" rx="8"/>
+  <rect class="e" x="520" y="262" width="60" height="36" rx="8"/>
+</svg>

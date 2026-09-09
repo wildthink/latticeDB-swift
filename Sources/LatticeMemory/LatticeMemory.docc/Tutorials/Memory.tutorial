@@ -1,0 +1,21 @@
+@Tutorials(name: "LatticeMemory") {
+  @Intro(title: "Remember and Forget") {
+    Build a small store that records what happened, concludes something from it,
+    keeps the link between the two, and can undo both.
+
+    You need Swift 6.1 or later and this package as a dependency. Reading
+    <doc:EvidenceAndAssertions> first will make the vocabulary familiar, but the
+    tutorial does not assume it.
+
+    @Image(source: "hero-memory.svg", alt: "Records linked to the evidence beneath them.")
+  }
+
+  @Chapter(name: "Remember and Forget") {
+    Record evidence, assert from it, read the result back at any point in its
+    history, then forget the source and watch the conclusion follow.
+
+    @Image(source: "chapter-remember.svg", alt: "Records linked to the evidence beneath them.")
+
+    @TutorialReference(tutorial: "doc:RememberAndForget")
+  }
+}

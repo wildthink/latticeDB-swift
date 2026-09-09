@@ -64,10 +64,19 @@ try store.record(EvidenceDraft(text: "We are using pnpm.", scope: ["project": "a
 let current = try store.currentAssertions(in: ["project": "acme"])
 ```
 
+Everything here is stored as nodes and edges in an ordinary graph file. The
+`LatticeDB` module documents that layer: `Database`, transactions, Cypher, and
+the full-text and vector indexes this store ranks with. Reach for it directly
+whenever you want to query the graph beneath a memory, and start with its
+*Getting Started* article if you have not opened a database before.
+
+New here? Follow <doc:/tutorials/Memory>.
+
 ## Topics
 
 ### Essentials
 
+- <doc:/tutorials/Memory>
 - <doc:EvidenceAndAssertions>
 - <doc:Retrieval>
 - <doc:Consolidation>

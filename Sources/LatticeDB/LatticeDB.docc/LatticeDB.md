@@ -41,6 +41,14 @@ let adults = try database.match(Person.self)
 New to graph databases? Start with <doc:GraphBasics>, then follow
 <doc:/tutorials/BuildAGraph>.
 
+### Storing records rather than a graph
+
+The `LatticeMemory` module is built on this one. It keeps records that cite
+their own evidence, are visible only within a declared scope, and are superseded
+rather than overwritten, so what was believed at any past moment stays readable.
+If that describes your problem better than raw nodes and edges do, read its
+documentation instead and treat this module as the layer underneath.
+
 ## Topics
 
 ### Essentials
@@ -77,8 +85,13 @@ New to graph databases? Start with <doc:GraphBasics>, then follow
 - ``GraphBuilder``
 - ``PropertyBuilder``
 - ``GraphComponent``
+- ``GraphElement``
 - ``NodeSpec``
 - ``EdgeSpec``
+- ``PropertyAssignment``
+- ``NodeReference``
+- ``NodeRef``
+- ``NodeTarget``
 - ``GraphApplyResult``
 - ``Database/apply(schema:mergeStrategy:_:)``
 
@@ -97,6 +110,8 @@ New to graph databases? Start with <doc:GraphBasics>, then follow
 - <doc:CypherAndJSON>
 - ``Query``
 - ``Predicate``
+- ``TraversalDirection``
+- ``SortDirection``
 - ``Cypher``
 - ``Row``
 - ``NodeSnapshot``

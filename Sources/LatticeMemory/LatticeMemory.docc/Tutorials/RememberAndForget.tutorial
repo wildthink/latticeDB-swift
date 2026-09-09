@@ -1,0 +1,209 @@
+@Tutorial(time: 20) {
+  @Intro(title: "Remember and Forget") {
+    Record something that happened, draw a conclusion from it that keeps a link
+    back to its source, read the conclusion back at any point in its history,
+    then remove the source and watch the conclusion go with it.
+
+    @Image(source: "chapter-remember.svg", alt: "Records linked to the evidence beneath them.")
+  }
+
+  @Section(title: "Record evidence and assert from it") {
+    @ContentAndMedia {
+      A store holds evidence, which is raw and never rewritten, and assertions,
+      which are derived from evidence and cite it. A ``MemorySchema`` decides
+      which assertions may be written at all.
+    }
+
+    @Steps {
+      @Step {
+        Declare the schema. A ``Slot`` is a name you choose; the ``SlotRule``
+        beside it constrains what may be stored there. This one accepts three
+        spellings and nothing else.
+
+        @Code(name: "Memory.swift", file: "Memory-01.swift")
+      }
+
+      @Step {
+        Open a store and name a scope. A ``Scope`` is a set of dimensions, and a
+        record is visible only from a query carrying the same values, so one
+        project's data cannot answer another project's question.
+
+        @Code(name: "Memory.swift", file: "Memory-02.swift")
+      }
+
+      @Step {
+        Record a piece of evidence. ``EvidenceDraft`` is what you hand in;
+        ``MemoryStore/record(_:)`` returns an ``IngestResult`` holding the
+        ``Evidence`` as stored, with its identifier and timestamps filled in.
+
+        @Code(name: "Memory.swift", file: "Memory-03.swift")
+      }
+
+      @Step {
+        Assert a conclusion from that evidence. The `quote` must appear verbatim
+        in the evidence text — the store checks it before writing — so the
+        assertion carries its own justification.
+
+        @Code(name: "Memory.swift", file: "Memory-04.swift")
+      }
+
+      @Step {
+        Or let an ``Extractor`` propose the assertion for you. A
+        ``PatternExtractor`` is regular expressions over the evidence text; the
+        schema still decides what is actually written, and anything it refuses
+        comes back in ``IngestResult/rejected``.
+
+        @Code(name: "Memory.swift", file: "Memory-05.swift")
+      }
+    }
+  }
+
+  @Section(title: "Read it back, then and now") {
+    @ContentAndMedia {
+      A new value for a single-valued slot supersedes the old one rather than
+      overwriting it, so the store answers both "what is true" and "what was
+      held to be true" without extra bookkeeping.
+    }
+
+    @Steps {
+      @Step {
+        Ask what currently holds in the scope.
+        ``MemoryStore/currentAssertions(in:slot:category:)`` returns only
+        assertions whose valid interval is still open.
+
+        @Code(name: "Recall.swift", file: "Recall-01.swift")
+      }
+
+      @Step {
+        Walk back to the source. ``MemoryStore/evidence(supporting:)`` returns
+        every record the assertion cites, so "why does the store believe this?"
+        is a query rather than an investigation.
+
+        @Code(name: "Recall.swift", file: "Recall-02.swift")
+      }
+
+      @Step {
+        Write a competing value. The earlier assertion closes rather than
+        disappearing, and ``MemoryStore/history(of:in:)`` returns the whole
+        audit trail for the slot, newest first.
+
+        @Code(name: "Recall.swift", file: "Recall-03.swift")
+      }
+
+      @Step {
+        Ask what held at some past moment.
+        ``MemoryStore/assertions(validAt:in:slot:category:)`` reads the same
+        intervals from the other direction.
+
+        @Code(name: "Recall.swift", file: "Recall-04.swift")
+      }
+
+      @Step {
+        Retrieve a bounded, ranked context instead of a single slot.
+        ``MemoryStore/retrieve(_:)`` fuses a lexical, vector, and facet lane,
+        and each ``RetrievedItem`` names the lanes that placed it.
+
+        @Code(name: "Recall.swift", file: "Recall-05.swift")
+      }
+
+      @Step {
+        Read the ``RetrievalTrace`` when a result looks short. It accounts for
+        every candidate the request discarded and why, which turns a silent
+        scope mistake into a number you can see.
+
+        @Code(name: "Recall.swift", file: "Recall-06.swift")
+      }
+    }
+  }
+
+  @Section(title: "Forget, and take the conclusions with it") {
+    @ContentAndMedia {
+      Removing evidence removes what rested on it. An assertion that loses every
+      citation is retracted and redacted; one that loses some survives on the
+      rest.
+    }
+
+    @Steps {
+      @Step {
+        Preview first. ``MemoryStore/forgetPreview(_:)`` computes the same
+        report as the real call without writing anything, so you can see the
+        blast radius before you accept it.
+
+        @Code(name: "Forget.swift", file: "Forget-01.swift")
+      }
+
+      @Step {
+        Apply it. ``ForgetMode/tombstone`` keeps the identifier and timestamps
+        so an audit can still show that a deletion happened;
+        ``ForgetMode/erase`` leaves nothing at all.
+
+        @Code(name: "Forget.swift", file: "Forget-02.swift")
+      }
+    }
+  }
+
+  @Assessments {
+    @MultipleChoice {
+      An assertion cites two pieces of evidence. You forget one of them. What
+      happens to the assertion?
+
+      @Choice(isCorrect: false) {
+        It is retracted, because one of its sources is gone.
+
+        @Justification(reaction: "Not quite.") {
+          Retraction happens only when an assertion loses *every* citation.
+        }
+      }
+
+      @Choice(isCorrect: true) {
+        It survives on the remaining citation, and the report lists it as
+        weakened.
+
+        @Justification(reaction: "Right.") {
+          ``ForgetReport/weakenedAssertions`` names exactly these.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        Nothing changes; forgetting only touches evidence.
+
+        @Justification(reaction: "Not quite.") {
+          Forgetting propagates, and any quote copied out of the forgotten
+          record is redacted with it.
+        }
+      }
+    }
+
+    @MultipleChoice {
+      A record is stored in the scope `["project": "acme"]`. Which query sees
+      it?
+
+      @Choice(isCorrect: false) {
+        A query in ``Scope/global``.
+
+        @Justification(reaction: "Not quite.") {
+          Visibility runs the other way: the record's dimensions must all appear
+          in the query's.
+        }
+      }
+
+      @Choice(isCorrect: true) {
+        A query in `["project": "acme", "user": "sam"]`.
+
+        @Justification(reaction: "Right.") {
+          The query carries every dimension the record declares, with the same
+          value, so the record is visible.
+        }
+      }
+
+      @Choice(isCorrect: false) {
+        A query in `["project": "globex"]`.
+
+        @Justification(reaction: "Not quite.") {
+          The dimension is present but the value differs, so the record stays
+          invisible.
+        }
+      }
+    }
+  }
+}
