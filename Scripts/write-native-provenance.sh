@@ -17,7 +17,9 @@ sha256() {
 
 version="$(sed -nE 's/^const version = "([^"]+)";.*/\1/p' "$source_dir/build.zig")"
 revision="$(git -C "$source_dir" rev-parse HEAD)"
-zig_version="$(zig version)"
+# The caller passes the Zig it built with; resolve one when run standalone.
+zig="${ZIG:-$("$(dirname "$0")/resolve-zig.sh" "$source_dir")}"
+zig_version="$("$zig" version)"
 header_sha256="$(sha256 "$header")"
 
 cat >"$artifact_dir/Provenance.json" <<EOF
