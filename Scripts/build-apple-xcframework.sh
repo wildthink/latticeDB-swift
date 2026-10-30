@@ -6,11 +6,12 @@ source_dir="${1:?usage: $0 /path/to/latticedb}"
 package_dir="$(cd "$(dirname "$0")/.." && pwd)"
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
+zig="$("$package_dir/Scripts/resolve-zig.sh" "$source_dir")"
 
 build_slice() {
   local arch="$1"
   local prefix="$work_dir/$arch"
-  (cd "$source_dir" && zig build -Doptimize=ReleaseFast -Dtarget="${arch}-macos" --prefix "$prefix")
+  (cd "$source_dir" && "$zig" build -Doptimize=ReleaseFast -Dtarget="${arch}-macos" --prefix "$prefix")
   # zig pads the archive symbol table to 4 bytes, so whether the object member
   # lands on the 8-byte boundary lipo and ld require is down to the symbol
   # count. When it does not, lipo reads the archive as empty instead of
@@ -31,7 +32,7 @@ xcodebuild -create-xcframework \
   -library "$work_dir/liblattice.a" \
   -headers "$arm_prefix/include" \
   -output "$package_dir/Artifacts/Lattice.xcframework"
-bash "$package_dir/Scripts/write-native-provenance.sh" \
+ZIG="$zig" bash "$package_dir/Scripts/write-native-provenance.sh" \
   "$source_dir" \
   "$package_dir/Artifacts/Lattice.xcframework" \
   "$package_dir/Sources/CLattice/include/lattice.h" \

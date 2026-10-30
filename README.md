@@ -44,6 +44,13 @@ builds documentation for everything the scheme builds.
 
 ## Native Version
 
+Building the native dependency needs a Zig toolchain of the exact minor version
+upstream was written against — Zig makes breaking language and standard library
+changes between minors, so a newer toolchain is not a usable one. The build
+resolves it itself: it takes `zig` from `PATH` when the version matches,
+otherwise the Homebrew `zig@<minor>` keg, and reports what to install when it
+finds neither. Pass `ZIG=/path/to/zig` to choose a toolchain explicitly.
+
 The pinned upstream repository, tag, version, and immutable commit are tracked
 in [`Native/LatticeDB.lock`](Native/LatticeDB.lock). Every native build verifies
 that both vendored C headers exactly match that source revision, then writes an
