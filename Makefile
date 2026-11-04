@@ -28,6 +28,7 @@ help:
 	@printf '%s\n' ''
 	@printf '%s\n' 'make native                                  Build the host-native LatticeDB dependency'
 	@printf '%s\n' 'make native LATTICE_SOURCE=/path/to/latticedb  Build from an existing upstream checkout'
+	@printf '%s\n' 'make native ZIG=/path/to/zig                  Build with a specific Zig toolchain'
 	@printf '%s\n' 'make verify-native                           Verify the pinned source revision and vendored header'
 	@printf '%s\n' 'make sync-native-header                      Sync both C headers from the pinned upstream source'
 	@printf '%s\n' 'make check-upstream                          Check upstream releases without changing the lock'
@@ -74,7 +75,7 @@ native-apple: verify-native
 
 native-linux: verify-native
 	@mkdir -p "$(LATTICE_LINUX_PREFIX)" "$(ZIG_GLOBAL_CACHE_DIR)"
-	cd "$(LATTICE_SOURCE)" && ZIG_GLOBAL_CACHE_DIR="$(ZIG_GLOBAL_CACHE_DIR)" zig build -Doptimize=ReleaseSafe $(ZIG_TARGET_ARGS) --prefix "$(LATTICE_LINUX_PREFIX)"
+	zig="$$(Scripts/resolve-zig.sh "$(LATTICE_SOURCE)")" && cd "$(LATTICE_SOURCE)" && ZIG_GLOBAL_CACHE_DIR="$(ZIG_GLOBAL_CACHE_DIR)" "$$zig" build -Doptimize=ReleaseSafe $(ZIG_TARGET_ARGS) --prefix "$(LATTICE_LINUX_PREFIX)"
 	bash Scripts/write-native-provenance.sh "$(LATTICE_SOURCE)" "$(LATTICE_LINUX_PREFIX)" Sources/CLattice/include/lattice.h "linux-shared-library" "$(if $(LATTICE_ZIG_TARGET),$(LATTICE_ZIG_TARGET),native)"
 
 build: native resolve
